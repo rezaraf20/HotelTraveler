@@ -1,9 +1,12 @@
 <?php
 /**
- * Ratehawk API Client
+ * Ratehawk API Client (FIXED)
  * File: includes/class-rh-api.php
  * 
- * Handles all communication with Ratehawk API
+ * Changes:
+ * - Fixed get_hotel_info() to use POST instead of GET
+ * - Fixed request headers
+ * - Improved error handling
  */
 
 if (!defined('ABSPATH')) {
@@ -18,7 +21,7 @@ class RH_API {
     private $base_url;
     
     /**
-     * Rate Limits per endpoint (from your documentation)
+     * Rate Limits per endpoint
      */
     private $rate_limits = [
         'search/serp/hotels' => ['limit' => 150, 'period' => 60],
@@ -56,9 +59,9 @@ class RH_API {
     }
     
     /**
-     * Main request method
+     * Main request method (FIXED)
      */
-    private function request($endpoint, $method = 'GET', $data = null, $timeout = 30) {
+    private function request($endpoint, $method = 'POST', $data = null, $timeout = 30) {
         // Check credentials
         if (empty($this->api_key_id) || empty($this->api_key)) {
             throw new Exception(__('API credentials not configured', 'ratehawk-traveler'));
@@ -73,14 +76,10 @@ class RH_API {
         // Prepare headers
         $headers = [
             'Authorization' => 'Basic ' . base64_encode($this->api_key_id . ':' . $this->api_key),
+            'Content-Type' => 'application/json',
             'Accept' => 'application/json',
             'User-Agent' => 'RatehawkTraveler/' . RH_VERSION . ' WordPress/' . get_bloginfo('version')
         ];
-        
-        // Add Content-Type only for POST requests
-        if ($method === 'POST') {
-            $headers['Content-Type'] = 'application/json';
-        }
         
         // Prepare request args
         $args = [
@@ -88,10 +87,12 @@ class RH_API {
             'timeout' => $timeout,
             'headers' => $headers,
             'sslverify' => true,
+            'httpversion' => '1.1'
         ];
         
-        if ($method === 'POST' && $data) {
-            $args['body'] = json_encode($data);
+        // Add body for POST requests
+        if ($method === 'POST' && !empty($data)) {
+            $args['body'] = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
         
         // Log request (masked)
@@ -112,22 +113,35 @@ class RH_API {
         // Get response details
         $http_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
+        
+        // Try to decode JSON
         $result = json_decode($body, true);
+        
+        // If JSON decode failed
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $this->log_error($endpoint, "JSON Decode Error: " . json_last_error_msg(), ['body' => substr($body, 0, 500)]);
+            throw new Exception("Invalid JSON response from API");
+        }
         
         // Log response
         $this->log_response($endpoint, $http_code, $result, $execution_time);
         
         // Handle errors
         if ($http_code >= 400) {
-            $error = $result['error'] ?? 'Unknown error';
-            $this->log_error($endpoint, "HTTP $http_code: $error", $result);
+            $error = $result['error'] ?? $result['message'] ?? 'Unknown error';
+            $error_details = $result['error_details'] ?? '';
+            
+            $this->log_error($endpoint, "HTTP $http_code: $error", [
+                'error_details' => $error_details,
+                'full_response' => $result
+            ]);
             
             // Special handling for rate limit
             if ($http_code === 429) {
                 throw new Exception(__('Rate limit exceeded. Please try again later.', 'ratehawk-traveler'));
             }
             
-            throw new Exception("API Error ($http_code): $error");
+            throw new Exception("API Error ($http_code): $error" . ($error_details ? " - $error_details" : ""));
         }
         
         // Record successful request for rate limiting
@@ -140,7 +154,6 @@ class RH_API {
      * Check rate limit before request
      */
     private function check_rate_limit($endpoint) {
-        // Find matching rate limit
         $limit_key = null;
         foreach ($this->rate_limits as $key => $limit) {
             if (strpos($endpoint, $key) !== false) {
@@ -150,7 +163,7 @@ class RH_API {
         }
         
         if (!$limit_key) {
-            return; // No rate limit defined
+            return;
         }
         
         $limit_data = $this->rate_limits[$limit_key];
@@ -274,19 +287,22 @@ class RH_API {
     // ==========================================
     
     /**
-     * Test connection - Get test hotel info
+     * Test connection - Get test hotel info (FIXED)
      */
     public function test_connection() {
         return $this->get_hotel_info(RH_TEST_HOTEL_ID, 'en');
     }
     
     /**
-     * Get hotel static information
+     * Get hotel static information (FIXED - Now uses POST)
      */
     public function get_hotel_info($hotel_id, $language = 'en') {
-        // Use GET with query parameters (no body)
-        $endpoint = "/hotel/info/?id=" . urlencode($hotel_id) . "&language=" . urlencode($language);
-        return $this->request($endpoint, 'GET', null);
+        $data = [
+            'id' => $hotel_id,
+            'language' => $language
+        ];
+        
+        return $this->request('/hotel/info/', 'POST', $data);
     }
     
     /**
@@ -417,7 +433,7 @@ class RH_API {
             'user' => $params['user'],
             'rooms' => $params['rooms'],
             'payment_type' => $params['payment_type'] ?? [
-                'type' => 'deposit' // B2B default
+                'type' => 'deposit'
             ]
         ];
         
@@ -458,16 +474,18 @@ class RH_API {
     }
     
     /**
-     * Get hotel dump
+     * Get hotel dump (GET method is correct for dumps)
      */
     public function get_hotel_dump($language = 'en') {
-        return $this->request("/hotel/info/dump/?language=$language", 'GET', null, 300);
+        $endpoint = "/hotel/info/dump/?language=" . urlencode($language);
+        return $this->request($endpoint, 'GET', null, 300);
     }
     
     /**
-     * Get hotel static data
+     * Get hotel static data (GET method is correct)
      */
     public function get_hotel_static($language = 'en') {
-        return $this->request("/hotel/static/?language=$language", 'GET', null, 300);
+        $endpoint = "/hotel/static/?language=" . urlencode($language);
+        return $this->request($endpoint, 'GET', null, 300);
     }
 }
