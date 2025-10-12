@@ -73,10 +73,14 @@ class RH_API {
         // Prepare headers
         $headers = [
             'Authorization' => 'Basic ' . base64_encode($this->api_key_id . ':' . $this->api_key),
-            'Content-Type' => 'application/json',
             'Accept' => 'application/json',
             'User-Agent' => 'RatehawkTraveler/' . RH_VERSION . ' WordPress/' . get_bloginfo('version')
         ];
+        
+        // Add Content-Type only for POST requests
+        if ($method === 'POST') {
+            $headers['Content-Type'] = 'application/json';
+        }
         
         // Prepare request args
         $args = [
