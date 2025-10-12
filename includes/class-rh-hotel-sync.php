@@ -224,6 +224,26 @@ class RH_Hotel_Sync {
         
         // Last sync time
         update_post_meta($post_id, '_rh_last_sync', current_time('mysql'));
+        
+        // CRITICAL: Traveler theme required fields (fix Fatal Error)
+        update_post_meta($post_id, 'multi_location', 'off');
+        update_post_meta($post_id, 'is_instant_booking', 'off');
+        update_post_meta($post_id, 'booking_period', 1); // int (not string!)
+        update_post_meta($post_id, 'discount_rate', 0);
+        update_post_meta($post_id, 'price', 0); // Will be filled by API dynamically
+        update_post_meta($post_id, 'price_unit', __('per night', 'ratehawk-traveler'));
+        update_post_meta($post_id, 'max_adult', 10);
+        update_post_meta($post_id, 'max_child', 5);
+        update_post_meta($post_id, 'allow_full_day', 'on');
+        update_post_meta($post_id, 'deposit_payment_status', 'off');
+        update_post_meta($post_id, 'cancel_booking_fee', 0);
+        update_post_meta($post_id, 'hotel_star', $star_rating);
+        
+        // Video (optional)
+        update_post_meta($post_id, 'video', '');
+        
+        // Enable Ratehawk booking flag
+        update_post_meta($post_id, '_is_ratehawk_hotel', 1);
     }
     
     /**
@@ -277,19 +297,40 @@ class RH_Hotel_Sync {
      */
     private function attach_hotel_images($post_id, $hotel_info) {
         if (empty($hotel_info['images'])) {
+            rh_log('No images found for hotel', ['post_id' => $post_id], 'warning');
             return;
+        }
+        
+        // Check if media functions are available
+        if (!function_exists('media_handle_sideload')) {
+            require_once(ABSPATH . 'wp-admin/includes/media.php');
+            require_once(ABSPATH . 'wp-admin/includes/file.php');
+            require_once(ABSPATH . 'wp-admin/includes/image.php');
         }
         
         $images = array_slice($hotel_info['images'], 0, 10); // Limit to 10 images
         $gallery_ids = [];
         $featured_set = false;
         
-        foreach ($images as $index => $image_url) {
-            if (is_array($image_url)) {
-                $image_url = $image_url['url'] ?? '';
+        foreach ($images as $index => $image_data) {
+            // Handle different image formats
+            $image_url = '';
+            
+            if (is_string($image_data)) {
+                $image_url = $image_data;
+            } elseif (is_array($image_data)) {
+                $image_url = $image_data['url'] ?? '';
             }
             
-            if (empty($image_url)) continue;
+            if (empty($image_url)) {
+                continue;
+            }
+            
+            // CRITICAL FIX: Replace {size} placeholder with actual size
+            if (strpos($image_url, '{size}') !== false) {
+                // Use 1024x768 for high quality
+                $image_url = str_replace('{size}', '1024x768', $image_url);
+            }
             
             try {
                 $attachment_id = $this->download_image($image_url, $post_id);
@@ -297,14 +338,26 @@ class RH_Hotel_Sync {
                 if ($attachment_id && !is_wp_error($attachment_id)) {
                     $gallery_ids[] = $attachment_id;
                     
+                    rh_log('Image downloaded successfully', [
+                        'post_id' => $post_id,
+                        'attachment_id' => $attachment_id,
+                        'index' => $index
+                    ], 'info');
+                    
                     // Set first image as featured
                     if (!$featured_set) {
                         set_post_thumbnail($post_id, $attachment_id);
                         $featured_set = true;
                     }
+                } else {
+                    $error_msg = is_wp_error($attachment_id) ? $attachment_id->get_error_message() : 'Unknown error';
+                    rh_log('Image download failed', [
+                        'url' => $image_url,
+                        'error' => $error_msg
+                    ], 'warning');
                 }
             } catch (Exception $e) {
-                rh_log('Image download failed', [
+                rh_log('Image download exception', [
                     'url' => $image_url,
                     'error' => $e->getMessage()
                 ], 'warning');
@@ -314,6 +367,12 @@ class RH_Hotel_Sync {
         // Save gallery
         if (!empty($gallery_ids)) {
             update_post_meta($post_id, 'gallery', implode(',', $gallery_ids));
+            rh_log('Gallery saved', [
+                'post_id' => $post_id,
+                'total_images' => count($gallery_ids)
+            ], 'info');
+        } else {
+            rh_log('No images were downloaded', ['post_id' => $post_id], 'warning');
         }
     }
     
@@ -321,9 +380,15 @@ class RH_Hotel_Sync {
      * Download and attach image
      */
     private function download_image($url, $post_id) {
-        require_once(ABSPATH . 'wp-admin/includes/media.php');
-        require_once(ABSPATH . 'wp-admin/includes/file.php');
-        require_once(ABSPATH . 'wp-admin/includes/image.php');
+        // Validate URL
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            throw new Exception('Invalid image URL');
+        }
+        
+        // Check if allow_url_fopen is enabled
+        if (!ini_get('allow_url_fopen')) {
+            throw new Exception('allow_url_fopen is disabled on server');
+        }
         
         // Download image
         $tmp = download_url($url);
@@ -332,14 +397,22 @@ class RH_Hotel_Sync {
             throw new Exception($tmp->get_error_message());
         }
         
+        // Get file extension from URL
+        $file_ext = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION);
+        if (empty($file_ext)) {
+            $file_ext = 'jpg';
+        }
+        
         // Prepare file array
         $file_array = [
-            'name' => basename($url),
+            'name' => 'hotel-' . $post_id . '-' . time() . '-' . wp_rand(1000, 9999) . '.' . $file_ext,
             'tmp_name' => $tmp
         ];
         
         // Handle sideload
-        $attachment_id = media_handle_sideload($file_array, $post_id);
+        $attachment_id = media_handle_sideload($file_array, $post_id, '', [
+            'test_form' => false
+        ]);
         
         if (is_wp_error($attachment_id)) {
             @unlink($tmp);

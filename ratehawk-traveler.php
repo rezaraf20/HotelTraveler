@@ -13,7 +13,7 @@
  */
 
 if (!defined('ABSPATH')) {
-    exit; // Exit if accessed directly
+    exit;
 }
 
 /**
@@ -32,7 +32,7 @@ define('RH_TEST_HOTEL_HID', 8473727);
 define('RH_TEST_HOTEL_ID', 'test_hotel_do_not_book');
 
 // Sync Mode: 'test' or 'production'
-define('RH_SYNC_MODE', 'test'); // فعلاً فقط test
+define('RH_SYNC_MODE', 'test');
 
 /**
  * Helper Functions - Load First!
@@ -44,14 +44,7 @@ require_once RH_PLUGIN_DIR . 'includes/functions.php';
  */
 final class Ratehawk_Traveler {
     
-    /**
-     * Plugin instance
-     */
     private static $instance = null;
-    
-    /**
-     * Minimum PHP version
-     */
     const MIN_PHP_VERSION = '7.4';
     
     /**
@@ -68,7 +61,6 @@ final class Ratehawk_Traveler {
      * Constructor
      */
     private function __construct() {
-        // Check requirements
         if (!$this->check_requirements()) {
             return;
         }
@@ -78,7 +70,7 @@ final class Ratehawk_Traveler {
     }
     
     /**
-     * چک کردن نیازمندی‌ها
+     * Check requirements
      */
     private function check_requirements() {
         // PHP Version
@@ -115,13 +107,14 @@ final class Ratehawk_Traveler {
     }
     
     /**
-     * بارگذاری فایل‌های وابسته
+     * Load dependencies
      */
     private function load_dependencies() {
         // Core Classes
         require_once RH_PLUGIN_DIR . 'includes/class-rh-install.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-cache.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-api.php';
+        require_once RH_PLUGIN_DIR . 'includes/class-rh-hotel-sync.php';
         
         // Admin
         if (is_admin()) {
@@ -133,15 +126,12 @@ final class Ratehawk_Traveler {
      * Initialize Hooks
      */
     private function init_hooks() {
-        // Activation & Deactivation
         register_activation_hook(RH_PLUGIN_FILE, ['RH_Install', 'activate']);
         register_deactivation_hook(RH_PLUGIN_FILE, ['RH_Install', 'deactivate']);
         
-        // Initialize
         add_action('plugins_loaded', [$this, 'init'], 0);
         add_action('init', [$this, 'load_textdomain']);
         
-        // Admin
         if (is_admin()) {
             add_action('admin_init', [$this, 'admin_init']);
         }
@@ -151,10 +141,12 @@ final class Ratehawk_Traveler {
      * Initialize Plugin
      */
     public function init() {
-        // Initialize Admin
         if (is_admin()) {
             RH_Admin::instance();
         }
+        
+        // Initialize Hotel Sync
+        RH_Hotel_Sync::instance();
         
         do_action('ratehawk_traveler_init');
     }
@@ -163,7 +155,6 @@ final class Ratehawk_Traveler {
      * Initialize Admin
      */
     public function admin_init() {
-        // Check if setup is complete
         $api_key_id = get_option('rh_api_key_id');
         $api_key = get_option('rh_api_key');
         
@@ -178,7 +169,7 @@ final class Ratehawk_Traveler {
     public function setup_notice() {
         $screen = get_current_screen();
         if ($screen && $screen->id === 'toplevel_page_ratehawk') {
-            return; // Don't show on settings page
+            return;
         }
         
         ?>
@@ -216,6 +207,13 @@ final class Ratehawk_Traveler {
     public function api() {
         return RH_API::instance();
     }
+    
+    /**
+     * Get Hotel Sync Instance
+     */
+    public function hotel_sync() {
+        return RH_Hotel_Sync::instance();
+    }
 }
 
 /**
@@ -229,8 +227,12 @@ function ratehawk_traveler() {
 ratehawk_traveler();
 
 /**
- * Get API Instance (Global Helper)
+ * Global Helper Functions
  */
 function rh_api() {
     return ratehawk_traveler()->api();
+}
+
+function rh_hotel_sync() {
+    return ratehawk_traveler()->hotel_sync();
 }

@@ -73,6 +73,15 @@ class RH_Admin {
             'ratehawk-test-api',
             [$this, 'test_api_page']
         );
+        
+        add_submenu_page(
+            'ratehawk',
+            __('Hotel Sync', 'ratehawk-traveler'),
+            __('Hotel Sync', 'ratehawk-traveler'),
+            'manage_options',
+            'ratehawk-hotel-sync',
+            [$this, 'hotel_sync_page']
+        );
     }
     
     /**
@@ -110,6 +119,16 @@ class RH_Admin {
      * Dashboard page
      */
     public function dashboard_page() {
+        global $wpdb;
+        
+        // Get stats
+        $table = $wpdb->prefix . 'rh_hotel_mapping';
+        $synced_hotels = $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE sync_status = 'completed'");
+        
+        $booking_table = $wpdb->prefix . 'rh_bookings';
+        $total_bookings = $wpdb->get_var("SELECT COUNT(*) FROM $booking_table");
+        $pending_bookings = $wpdb->get_var("SELECT COUNT(*) FROM $booking_table WHERE status = 'pending'");
+        
         ?>
         <div class="wrap">
             <h1><?php _e('Ratehawk Dashboard', 'ratehawk-traveler'); ?></h1>
@@ -141,13 +160,26 @@ class RH_Admin {
                         <a href="<?php echo admin_url('admin.php?page=ratehawk-test-api'); ?>" class="button">
                             <?php _e('Test API Connection', 'ratehawk-traveler'); ?>
                         </a>
+                        <a href="<?php echo admin_url('admin.php?page=ratehawk-hotel-sync'); ?>" class="button button-primary">
+                            <?php _e('Sync Hotels', 'ratehawk-traveler'); ?>
+                        </a>
                     </p>
                 <?php endif; ?>
             </div>
             
-            <div class="card">
-                <h2><?php _e('Quick Stats', 'ratehawk-traveler'); ?></h2>
-                <p><?php _e('Statistics will appear here after integration is complete.', 'ratehawk-traveler'); ?></p>
+            <div class="rh-dashboard-stats">
+                <div class="stat">
+                    <h3><?php echo $synced_hotels; ?></h3>
+                    <p><?php _e('Synced Hotels', 'ratehawk-traveler'); ?></p>
+                </div>
+                <div class="stat">
+                    <h3><?php echo $total_bookings; ?></h3>
+                    <p><?php _e('Total Bookings', 'ratehawk-traveler'); ?></p>
+                </div>
+                <div class="stat">
+                    <h3><?php echo $pending_bookings; ?></h3>
+                    <p><?php _e('Pending Bookings', 'ratehawk-traveler'); ?></p>
+                </div>
             </div>
         </div>
         <?php
@@ -333,6 +365,154 @@ class RH_Admin {
                             },
                             complete: function() {
                                 btn.prop('disabled', false).text('<?php _e('Test Connection', 'ratehawk-traveler'); ?>');
+                            }
+                        });
+                    });
+                });
+                </script>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+    
+    /**
+     * Hotel Sync page
+     */
+    public function hotel_sync_page() {
+        global $wpdb;
+        
+        $table = $wpdb->prefix . 'rh_hotel_mapping';
+        $synced_hotels = $wpdb->get_results("SELECT * FROM $table ORDER BY last_sync DESC LIMIT 20");
+        
+        ?>
+        <div class="wrap">
+            <h1><?php _e('Hotel Sync', 'ratehawk-traveler'); ?></h1>
+            
+            <?php if (!rh_is_configured()): ?>
+                <div class="notice notice-error">
+                    <p>
+                        <?php _e('Please configure your API credentials first.', 'ratehawk-traveler'); ?>
+                        <a href="<?php echo admin_url('admin.php?page=ratehawk-settings'); ?>">
+                            <?php _e('Go to Settings', 'ratehawk-traveler'); ?>
+                        </a>
+                    </p>
+                </div>
+            <?php else: ?>
+                <div class="card">
+                    <h2><?php _e('Sync Test Hotel', 'ratehawk-traveler'); ?></h2>
+                    <p>
+                        <?php _e('Sync the test hotel from Ratehawk API to your Traveler theme.', 'ratehawk-traveler'); ?><br>
+                        <strong>Hotel ID:</strong> <?php echo RH_TEST_HOTEL_ID; ?> | 
+                        <strong>HID:</strong> <?php echo RH_TEST_HOTEL_HID; ?>
+                    </p>
+                    
+                    <p>
+                        <button type="button" id="sync-test-hotel-btn" class="button button-primary">
+                            <?php _e('Sync Test Hotel', 'ratehawk-traveler'); ?>
+                        </button>
+                    </p>
+                    
+                    <div id="sync-result" style="margin-top: 20px;"></div>
+                </div>
+                
+                <?php if (!empty($synced_hotels)): ?>
+                <div class="card" style="margin-top: 20px;">
+                    <h2><?php _e('Synced Hotels', 'ratehawk-traveler'); ?></h2>
+                    <table class="wp-list-table widefat fixed striped">
+                        <thead>
+                            <tr>
+                                <th><?php _e('Post ID', 'ratehawk-traveler'); ?></th>
+                                <th><?php _e('Hotel Name', 'ratehawk-traveler'); ?></th>
+                                <th><?php _e('RH HID', 'ratehawk-traveler'); ?></th>
+                                <th><?php _e('Status', 'ratehawk-traveler'); ?></th>
+                                <th><?php _e('Last Sync', 'ratehawk-traveler'); ?></th>
+                                <th><?php _e('Actions', 'ratehawk-traveler'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($synced_hotels as $hotel): ?>
+                                <?php 
+                                $post = get_post($hotel->st_hotel_post_id);
+                                $hotel_name = $post ? $post->post_title : 'Unknown';
+                                ?>
+                                <tr>
+                                    <td><?php echo $hotel->st_hotel_post_id; ?></td>
+                                    <td><?php echo esc_html($hotel_name); ?></td>
+                                    <td><?php echo $hotel->ratehawk_hid; ?></td>
+                                    <td>
+                                        <span class="status-<?php echo $hotel->sync_status; ?>">
+                                            <?php echo ucfirst($hotel->sync_status); ?>
+                                        </span>
+                                    </td>
+                                    <td><?php echo $hotel->last_sync; ?></td>
+                                    <td>
+                                        <a href="<?php echo get_permalink($hotel->st_hotel_post_id); ?>" 
+                                           class="button button-small" target="_blank">
+                                            <?php _e('View', 'ratehawk-traveler'); ?>
+                                        </a>
+                                        <a href="<?php echo get_edit_post_link($hotel->st_hotel_post_id); ?>" 
+                                           class="button button-small">
+                                            <?php _e('Edit', 'ratehawk-traveler'); ?>
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
+                
+                <script>
+                jQuery(document).ready(function($) {
+                    $('#sync-test-hotel-btn').on('click', function() {
+                        var btn = $(this);
+                        var result = $('#sync-result');
+                        
+                        btn.prop('disabled', true).text('<?php _e('Syncing...', 'ratehawk-traveler'); ?>');
+                        result.html('<p><?php _e('Fetching hotel data from Ratehawk API...', 'ratehawk-traveler'); ?></p>');
+                        
+                        $.ajax({
+                            url: rhAdmin.ajax_url,
+                            method: 'POST',
+                            data: {
+                                action: 'rh_sync_test_hotel',
+                                nonce: rhAdmin.nonce
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    result.html(
+                                        '<div class="notice notice-success inline">' +
+                                        '<p><strong>✓ Success!</strong></p>' +
+                                        '<p>Hotel Name: ' + response.data.hotel_name + '</p>' +
+                                        '<p>Post ID: ' + response.data.post_id + '</p>' +
+                                        '<p>Hotel ID: ' + response.data.hotel_id + '</p>' +
+                                        '<p>HID: ' + response.data.hotel_hid + '</p>' +
+                                        '<p><a href="' + response.data.permalink + '" target="_blank" class="button">View Hotel</a> ' +
+                                        '<a href="<?php echo admin_url('post.php?action=edit&post='); ?>' + response.data.post_id + '" class="button">Edit Hotel</a></p>' +
+                                        '</div>'
+                                    );
+                                    
+                                    // Reload page after 2 seconds to show in table
+                                    setTimeout(function() {
+                                        location.reload();
+                                    }, 2000);
+                                } else {
+                                    result.html(
+                                        '<div class="notice notice-error inline">' +
+                                        '<p><strong>✗ Error:</strong> ' + response.data + '</p>' +
+                                        '</div>'
+                                    );
+                                }
+                            },
+                            error: function() {
+                                result.html(
+                                    '<div class="notice notice-error inline">' +
+                                    '<p><strong>✗ Sync Error</strong></p>' +
+                                    '</div>'
+                                );
+                            },
+                            complete: function() {
+                                btn.prop('disabled', false).text('<?php _e('Sync Test Hotel', 'ratehawk-traveler'); ?>');
                             }
                         });
                     });
