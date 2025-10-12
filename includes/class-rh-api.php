@@ -284,7 +284,9 @@ class RH_API {
      * Get hotel static information
      */
     public function get_hotel_info($hotel_id, $language = 'en') {
-        return $this->request("/hotel/info/?id=$hotel_id&language=$language", 'GET');
+        // Use GET with query parameters (no body)
+        $endpoint = "/hotel/info/?id=" . urlencode($hotel_id) . "&language=" . urlencode($language);
+        return $this->request($endpoint, 'GET', null);
     }
     
     /**
