@@ -123,7 +123,7 @@ final class Ratehawk_Traveler {
         require_once RH_PLUGIN_DIR . 'includes/class-rh-cache.php';
         
         // API will be loaded later
-        // require_once RH_PLUGIN_DIR . 'includes/class-rh-api.php';
+        require_once RH_PLUGIN_DIR . 'includes/class-rh-api.php';
         
         // Admin
         if (is_admin()) {
