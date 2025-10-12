@@ -354,6 +354,25 @@ class RH_Admin {
         }
         
         try {
+            // Check if API class exists
+            if (!class_exists('RH_API')) {
+                wp_send_json_error('RH_API class not found. Please check if class-rh-api.php is loaded.');
+            }
+            
+            // Check if rh_api() function exists
+            if (!function_exists('rh_api')) {
+                wp_send_json_error('rh_api() function not found. Please check ratehawk-traveler.php');
+            }
+            
+            // Check credentials
+            $api_key_id = get_option('rh_api_key_id');
+            $api_key = get_option('rh_api_key');
+            
+            if (empty($api_key_id) || empty($api_key)) {
+                wp_send_json_error('API credentials not configured');
+            }
+            
+            // Try connection
             $start_time = microtime(true);
             $result = rh_api()->test_connection();
             $response_time = round((microtime(true) - $start_time) * 1000, 2) . 'ms';
@@ -366,11 +385,13 @@ class RH_Admin {
                     'response_time' => $response_time
                 ]);
             } else {
-                wp_send_json_error('Invalid response from API');
+                wp_send_json_error('Invalid response from API. Response: ' . json_encode($result));
             }
             
         } catch (Exception $e) {
-            wp_send_json_error($e->getMessage());
+            wp_send_json_error('Exception: ' . $e->getMessage() . ' | File: ' . $e->getFile() . ' | Line: ' . $e->getLine());
+        } catch (Error $e) {
+            wp_send_json_error('Error: ' . $e->getMessage() . ' | File: ' . $e->getFile() . ' | Line: ' . $e->getLine());
         }
     }
 }

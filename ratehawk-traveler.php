@@ -121,8 +121,6 @@ final class Ratehawk_Traveler {
         // Core Classes
         require_once RH_PLUGIN_DIR . 'includes/class-rh-install.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-cache.php';
-        
-        // API will be loaded later
         require_once RH_PLUGIN_DIR . 'includes/class-rh-api.php';
         
         // Admin
@@ -211,18 +209,13 @@ final class Ratehawk_Traveler {
     public function cache() {
         return RH_Cache::instance();
     }
+    
     /**
- * Get API Instance
- */
-public function api() {
-    return RH_API::instance();
-}
-/**
- * Get API Instance
- */
-function rh_api() {
-    return ratehawk_traveler()->api();
-}
+     * Get API Instance
+     */
+    public function api() {
+        return RH_API::instance();
+    }
 }
 
 /**
@@ -234,3 +227,10 @@ function ratehawk_traveler() {
 
 // Start the plugin
 ratehawk_traveler();
+
+/**
+ * Get API Instance (Global Helper)
+ */
+function rh_api() {
+    return ratehawk_traveler()->api();
+}
