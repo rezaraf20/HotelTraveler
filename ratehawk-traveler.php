@@ -211,6 +211,18 @@ final class Ratehawk_Traveler {
     public function cache() {
         return RH_Cache::instance();
     }
+    /**
+ * Get API Instance
+ */
+public function api() {
+    return RH_API::instance();
+}
+/**
+ * Get API Instance
+ */
+function rh_api() {
+    return ratehawk_traveler()->api();
+}
 }
 
 /**

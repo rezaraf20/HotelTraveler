@@ -61,6 +61,18 @@ class RH_Admin {
             'ratehawk-settings',
             [$this, 'settings_page']
         );
+        
+        add_submenu_page(
+            'ratehawk',
+            __('Test API', 'ratehawk-traveler'),
+            __('Test API', 'ratehawk-traveler'),
+            'manage_options',
+            'ratehawk-test-api',
+            [$this, 'test_api_page']
+        );
+        
+        // AJAX handlers
+        add_action('wp_ajax_rh_test_connection', [$this, 'ajax_test_connection']);
     }
     
     /**
