@@ -229,6 +229,7 @@ class RH_Hotel_Sync {
         update_post_meta($post_id, 'multi_location', 'off');
         update_post_meta($post_id, 'is_instant_booking', 'off');
         update_post_meta($post_id, 'booking_period', 1); // int (not string!)
+        update_post_meta($post_id, 'hotel_booking_period', 1); // CRITICAL: Must be int for date-inquiry.php
         update_post_meta($post_id, 'discount_rate', 0);
         update_post_meta($post_id, 'price', 0); // Will be filled by API dynamically
         update_post_meta($post_id, 'price_unit', __('per night', 'ratehawk-traveler'));
