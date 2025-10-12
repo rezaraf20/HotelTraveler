@@ -28,6 +28,9 @@ class RH_Admin {
     private function __construct() {
         add_action('admin_menu', [$this, 'add_menu']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_scripts']);
+        
+        // AJAX handlers
+        add_action('wp_ajax_rh_test_connection', [$this, 'ajax_test_connection']);
     }
     
     /**
@@ -70,9 +73,6 @@ class RH_Admin {
             'ratehawk-test-api',
             [$this, 'test_api_page']
         );
-        
-        // AJAX handlers
-        add_action('wp_ajax_rh_test_connection', [$this, 'ajax_test_connection']);
     }
     
     /**
@@ -136,6 +136,12 @@ class RH_Admin {
                             <?php _e('Your plugin is ready to use!', 'ratehawk-traveler'); ?>
                         </p>
                     </div>
+                    
+                    <p>
+                        <a href="<?php echo admin_url('admin.php?page=ratehawk-test-api'); ?>" class="button">
+                            <?php _e('Test API Connection', 'ratehawk-traveler'); ?>
+                        </a>
+                    </p>
                 <?php endif; ?>
             </div>
             
@@ -250,5 +256,121 @@ class RH_Admin {
             </table>
         </div>
         <?php
+    }
+    
+    /**
+     * Test API page
+     */
+    public function test_api_page() {
+        ?>
+        <div class="wrap">
+            <h1><?php _e('Test API Connection', 'ratehawk-traveler'); ?></h1>
+            
+            <?php if (!rh_is_configured()): ?>
+                <div class="notice notice-error">
+                    <p>
+                        <?php _e('Please configure your API credentials first.', 'ratehawk-traveler'); ?>
+                        <a href="<?php echo admin_url('admin.php?page=ratehawk-settings'); ?>">
+                            <?php _e('Go to Settings', 'ratehawk-traveler'); ?>
+                        </a>
+                    </p>
+                </div>
+            <?php else: ?>
+                <div class="card">
+                    <h2><?php _e('Test Connection', 'ratehawk-traveler'); ?></h2>
+                    <p><?php _e('Click the button below to test your API connection with the test hotel.', 'ratehawk-traveler'); ?></p>
+                    
+                    <p>
+                        <button type="button" id="test-connection-btn" class="button button-primary">
+                            <?php _e('Test Connection', 'ratehawk-traveler'); ?>
+                        </button>
+                    </p>
+                    
+                    <div id="test-result" style="margin-top: 20px;"></div>
+                </div>
+                
+                <script>
+                jQuery(document).ready(function($) {
+                    $('#test-connection-btn').on('click', function() {
+                        var btn = $(this);
+                        var result = $('#test-result');
+                        
+                        btn.prop('disabled', true).text('<?php _e('Testing...', 'ratehawk-traveler'); ?>');
+                        result.html('<p><?php _e('Connecting to Ratehawk API...', 'ratehawk-traveler'); ?></p>');
+                        
+                        $.ajax({
+                            url: rhAdmin.ajax_url,
+                            method: 'POST',
+                            data: {
+                                action: 'rh_test_connection',
+                                nonce: rhAdmin.nonce
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    result.html(
+                                        '<div class="notice notice-success inline">' +
+                                        '<p><strong>✓ Success!</strong></p>' +
+                                        '<p>Hotel Name: ' + response.data.hotel_name + '</p>' +
+                                        '<p>Hotel ID: ' + response.data.hotel_id + '</p>' +
+                                        '<p>HID: ' + response.data.hid + '</p>' +
+                                        '<p>Response Time: ' + response.data.response_time + '</p>' +
+                                        '</div>'
+                                    );
+                                } else {
+                                    result.html(
+                                        '<div class="notice notice-error inline">' +
+                                        '<p><strong>✗ Error:</strong> ' + response.data + '</p>' +
+                                        '</div>'
+                                    );
+                                }
+                            },
+                            error: function() {
+                                result.html(
+                                    '<div class="notice notice-error inline">' +
+                                    '<p><strong>✗ Connection Error</strong></p>' +
+                                    '</div>'
+                                );
+                            },
+                            complete: function() {
+                                btn.prop('disabled', false).text('<?php _e('Test Connection', 'ratehawk-traveler'); ?>');
+                            }
+                        });
+                    });
+                });
+                </script>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+    
+    /**
+     * AJAX: Test connection
+     */
+    public function ajax_test_connection() {
+        check_ajax_referer('ratehawk_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Permission denied');
+        }
+        
+        try {
+            $start_time = microtime(true);
+            $result = rh_api()->test_connection();
+            $response_time = round((microtime(true) - $start_time) * 1000, 2) . 'ms';
+            
+            if (isset($result['data']['id'])) {
+                wp_send_json_success([
+                    'hotel_name' => $result['data']['name'] ?? 'Unknown',
+                    'hotel_id' => $result['data']['id'],
+                    'hid' => $result['data']['hid'],
+                    'response_time' => $response_time
+                ]);
+            } else {
+                wp_send_json_error('Invalid response from API');
+            }
+            
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
     }
 }
