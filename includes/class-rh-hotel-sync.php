@@ -419,12 +419,23 @@ class RH_Hotel_Sync {
         ], 'info');
         
         $synced_rooms = [];
+        $room_count = 0;
+        $max_rooms = 9; // Process all rooms
         
         foreach ($hotel_info['room_groups'] as $room_group) {
+            if ($room_count >= $max_rooms) {
+                rh_log('Max rooms reached', ['count' => $max_rooms], 'info');
+                break;
+            }
+            
             try {
                 $room_post_id = $this->create_or_update_room($hotel_post_id, $room_group);
                 if ($room_post_id) {
                     $synced_rooms[] = $room_post_id;
+                    $room_count++;
+                    
+                    // Small delay between rooms
+                    usleep(200000); // 0.2 seconds
                 }
             } catch (Exception $e) {
                 rh_log('Room sync failed', [
@@ -584,9 +595,19 @@ class RH_Hotel_Sync {
     }
     
     private function attach_room_images($room_post_id, $room_group) {
-        $images = $room_group['images_ext'] ?? $room_group['images'] ?? [];
+        // Try images_ext first (better format)
+        $images = $room_group['images_ext'] ?? [];
+        
+        // Fallback to images
+        if (empty($images)) {
+            $images = $room_group['images'] ?? [];
+        }
         
         if (empty($images)) {
+            rh_log('No room images found', [
+                'room_post_id' => $room_post_id,
+                'room_name' => $room_group['name'] ?? 'Unknown'
+            ], 'warning');
             return;
         }
         
@@ -600,18 +621,42 @@ class RH_Hotel_Sync {
         $gallery_ids = [];
         $featured_set = false;
         
-        foreach ($images as $image_data) {
-            $image_url = is_string($image_data) ? $image_data : ($image_data['url'] ?? '');
+        rh_log('Starting room images download', [
+            'room_post_id' => $room_post_id,
+            'total_images' => count($images)
+        ], 'info');
+        
+        foreach ($images as $index => $image_data) {
+            // Extract URL from different formats
+            $image_url = '';
+            
+            if (is_string($image_data)) {
+                $image_url = $image_data;
+            } elseif (is_array($image_data) && isset($image_data['url'])) {
+                $image_url = $image_data['url'];
+            }
             
             if (empty($image_url)) {
+                rh_log('Empty room image URL', [
+                    'room_post_id' => $room_post_id,
+                    'index' => $index,
+                    'data' => $image_data
+                ], 'warning');
                 continue;
             }
             
+            // Fix {size} placeholder
             if (strpos($image_url, '{size}') !== false) {
                 $image_url = str_replace('{size}', '800x600', $image_url);
             }
             
             try {
+                rh_log('Attempting room image download', [
+                    'room_post_id' => $room_post_id,
+                    'url' => substr($image_url, 0, 100),
+                    'index' => $index
+                ], 'info');
+                
                 $attachment_id = $this->download_image($image_url, $room_post_id);
                 
                 if ($attachment_id && !is_wp_error($attachment_id)) {
@@ -621,14 +666,43 @@ class RH_Hotel_Sync {
                         set_post_thumbnail($room_post_id, $attachment_id);
                         $featured_set = true;
                     }
+                    
+                    rh_log('Room image downloaded successfully', [
+                        'room_post_id' => $room_post_id,
+                        'attachment_id' => $attachment_id,
+                        'index' => $index
+                    ], 'info');
+                } else {
+                    $error_msg = is_wp_error($attachment_id) ? $attachment_id->get_error_message() : 'Unknown error';
+                    rh_log('Room image download failed', [
+                        'room_post_id' => $room_post_id,
+                        'url' => substr($image_url, 0, 100),
+                        'error' => $error_msg
+                    ], 'warning');
                 }
             } catch (Exception $e) {
-                // Silent fail for room images
+                rh_log('Room image exception', [
+                    'room_post_id' => $room_post_id,
+                    'url' => substr($image_url, 0, 100),
+                    'error' => $e->getMessage()
+                ], 'warning');
             }
+            
+            // Small delay to avoid overwhelming the server
+            usleep(100000); // 0.1 second
         }
         
         if (!empty($gallery_ids)) {
             update_post_meta($room_post_id, 'gallery', implode(',', $gallery_ids));
+            
+            rh_log('Room gallery saved', [
+                'room_post_id' => $room_post_id,
+                'total_images' => count($gallery_ids)
+            ], 'info');
+        } else {
+            rh_log('No room images were downloaded', [
+                'room_post_id' => $room_post_id
+            ], 'warning');
         }
     }
     
