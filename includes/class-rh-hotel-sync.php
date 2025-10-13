@@ -375,22 +375,66 @@ class RH_Hotel_Sync {
     
     private function download_image($url, $post_id) {
         if (!filter_var($url, FILTER_VALIDATE_URL)) {
-            throw new Exception('Invalid URL');
+            throw new Exception('Invalid URL: ' . $url);
         }
+        
+        rh_log('Downloading image', [
+            'url' => $url,
+            'post_id' => $post_id
+        ], 'info');
+        
+        // Try with custom headers first
+        add_filter('http_request_args', function($args, $request_url) use ($url) {
+            if ($request_url === $url) {
+                $args['headers'] = [
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept' => 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                    'Accept-Language' => 'en-US,en;q=0.9',
+                    'Referer' => 'https://www.ratehawk.com/',
+                    'Origin' => 'https://www.ratehawk.com'
+                ];
+                $args['timeout'] = 30;
+                $args['sslverify'] = true;
+            }
+            return $args;
+        }, 10, 2);
         
         $tmp = download_url($url);
         
+        remove_all_filters('http_request_args');
+        
+        // If download_url failed with Bad Request, try cURL
+        if (is_wp_error($tmp) && strpos($tmp->get_error_message(), 'Bad Request') !== false) {
+            rh_log('download_url failed, trying cURL', ['url' => $url], 'info');
+            $tmp = $this->download_with_curl($url);
+        }
+        
         if (is_wp_error($tmp)) {
-            throw new Exception($tmp->get_error_message());
+            $error = $tmp->get_error_message();
+            rh_log('Download failed', [
+                'url' => $url,
+                'error' => $error
+            ], 'warning');
+            throw new Exception($error);
+        }
+        
+        if (!file_exists($tmp)) {
+            throw new Exception('Downloaded file does not exist');
+        }
+        
+        $file_size = filesize($tmp);
+        if ($file_size === false || $file_size < 100) {
+            @unlink($tmp);
+            throw new Exception('File too small: ' . $file_size . ' bytes');
         }
         
         $file_ext = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION);
-        if (empty($file_ext)) {
+        if (empty($file_ext) || !in_array(strtolower($file_ext), ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
             $file_ext = 'jpg';
         }
         
         $file_array = [
-            'name' => 'hotel-' . $post_id . '-' . time() . '-' . wp_rand(1000, 9999) . '.' . $file_ext,
+            'name' => 'rh-' . $post_id . '-' . time() . '-' . wp_rand(1000, 9999) . '.' . $file_ext,
             'tmp_name' => $tmp
         ];
         
@@ -401,7 +445,53 @@ class RH_Hotel_Sync {
             throw new Exception($attachment_id->get_error_message());
         }
         
+        rh_log('Image downloaded successfully', [
+            'url' => substr($url, 0, 80),
+            'attachment_id' => $attachment_id,
+            'file_size' => size_format($file_size)
+        ], 'info');
+        
         return $attachment_id;
+    }
+    
+    /**
+     * Download image using cURL (fallback method)
+     */
+    private function download_with_curl($url) {
+        if (!function_exists('curl_init')) {
+            return new WP_Error('curl_missing', 'cURL is not available');
+        }
+        
+        $tmp_file = wp_tempnam($url);
+        
+        $ch = curl_init($url);
+        $fp = fopen($tmp_file, 'wb');
+        
+        curl_setopt($ch, CURLOPT_FILE, $fp);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+            'Accept-Language: en-US,en;q=0.9',
+            'Referer: https://www.ratehawk.com/',
+            'Origin: https://www.ratehawk.com'
+        ]);
+        
+        $result = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        
+        curl_close($ch);
+        fclose($fp);
+        
+        if ($result === false || $http_code >= 400) {
+            @unlink($tmp_file);
+            return new WP_Error('curl_failed', 'cURL failed: ' . $error . ' (HTTP ' . $http_code . ')');
+        }
+        
+        return $tmp_file;
     }
     
     /**
