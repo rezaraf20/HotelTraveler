@@ -735,47 +735,90 @@ class RH_Hotel_Sync {
                 continue;
             }
             
-            // Fix {size} placeholder
+            // Fix {size} placeholder with VALID sizes for Ratehawk CDN
             if (strpos($image_url, '{size}') !== false) {
-                $image_url = str_replace('{size}', '800x600', $image_url);
-            }
-            
-            try {
-                rh_log('Attempting room image download', [
-                    'room_post_id' => $room_post_id,
-                    'url' => substr($image_url, 0, 100),
-                    'index' => $index
-                ], 'info');
+                // Try multiple valid sizes in order of preference
+                $valid_sizes = ['1024x768', '640x400', 'orig'];
+                $download_success = false;
                 
-                $attachment_id = $this->download_image($image_url, $room_post_id);
-                
-                if ($attachment_id && !is_wp_error($attachment_id)) {
-                    $gallery_ids[] = $attachment_id;
+                foreach ($valid_sizes as $size) {
+                    $test_url = str_replace('{size}', $size, $image_url);
                     
-                    if (!$featured_set) {
-                        set_post_thumbnail($room_post_id, $attachment_id);
-                        $featured_set = true;
+                    try {
+                        rh_log('Attempting room image download', [
+                            'room_post_id' => $room_post_id,
+                            'url' => substr($test_url, 0, 100),
+                            'size' => $size,
+                            'index' => $index
+                        ], 'info');
+                        
+                        $attachment_id = $this->download_image($test_url, $room_post_id);
+                        
+                        if ($attachment_id && !is_wp_error($attachment_id)) {
+                            $gallery_ids[] = $attachment_id;
+                            
+                            if (!$featured_set) {
+                                set_post_thumbnail($room_post_id, $attachment_id);
+                                $featured_set = true;
+                            }
+                            
+                            rh_log('Room image downloaded successfully', [
+                                'room_post_id' => $room_post_id,
+                                'attachment_id' => $attachment_id,
+                                'size' => $size,
+                                'index' => $index
+                            ], 'info');
+                            
+                            $download_success = true;
+                            break; // Success! No need to try other sizes
+                        }
+                    } catch (Exception $e) {
+                        rh_log('Room image failed with size ' . $size, [
+                            'room_post_id' => $room_post_id,
+                            'url' => substr($test_url, 0, 100),
+                            'error' => $e->getMessage()
+                        ], 'warning');
+                        // Try next size
+                        continue;
                     }
-                    
-                    rh_log('Room image downloaded successfully', [
+                }
+                
+                if (!$download_success) {
+                    rh_log('All sizes failed for room image', [
                         'room_post_id' => $room_post_id,
-                        'attachment_id' => $attachment_id,
-                        'index' => $index
-                    ], 'info');
-                } else {
-                    $error_msg = is_wp_error($attachment_id) ? $attachment_id->get_error_message() : 'Unknown error';
-                    rh_log('Room image download failed', [
-                        'room_post_id' => $room_post_id,
-                        'url' => substr($image_url, 0, 100),
-                        'error' => $error_msg
+                        'original_url' => substr($image_url, 0, 100)
                     ], 'warning');
                 }
-            } catch (Exception $e) {
-                rh_log('Room image exception', [
-                    'room_post_id' => $room_post_id,
-                    'url' => substr($image_url, 0, 100),
-                    'error' => $e->getMessage()
-                ], 'warning');
+            } else {
+                // URL doesn't have {size} placeholder, use as-is
+                try {
+                    rh_log('Attempting room image download (no size)', [
+                        'room_post_id' => $room_post_id,
+                        'url' => substr($image_url, 0, 100)
+                    ], 'info');
+                    
+                    $attachment_id = $this->download_image($image_url, $room_post_id);
+                    
+                    if ($attachment_id && !is_wp_error($attachment_id)) {
+                        $gallery_ids[] = $attachment_id;
+                        
+                        if (!$featured_set) {
+                            set_post_thumbnail($room_post_id, $attachment_id);
+                            $featured_set = true;
+                        }
+                        
+                        rh_log('Room image downloaded successfully', [
+                            'room_post_id' => $room_post_id,
+                            'attachment_id' => $attachment_id
+                        ], 'info');
+                    }
+                } catch (Exception $e) {
+                    rh_log('Room image exception', [
+                        'room_post_id' => $room_post_id,
+                        'url' => substr($image_url, 0, 100),
+                        'error' => $e->getMessage()
+                    ], 'warning');
+                }
             }
             
             // Small delay to avoid overwhelming the server
