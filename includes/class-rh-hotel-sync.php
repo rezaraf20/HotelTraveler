@@ -73,6 +73,16 @@ class RH_Hotel_Sync {
         $this->sync_hotel_rooms($post_id, $hotel_info);
         $this->save_hotel_mapping($post_id, $hotel_id, $hotel_hid);
         
+        // CRITICAL: Update hotel to trigger Traveler hooks
+        wp_update_post([
+            'ID' => $post_id,
+            'post_modified' => current_time('mysql'),
+            'post_modified_gmt' => current_time('mysql', 1)
+        ]);
+        
+        // Clear caches
+        clean_post_cache($post_id);
+        
         rh_log('Hotel synced successfully', [
             'post_id' => $post_id,
             'hotel_id' => $hotel_id,
@@ -621,6 +631,21 @@ class RH_Hotel_Sync {
         $this->save_room_meta($room_post_id, $hotel_post_id, $room_group);
         $this->save_room_facilities($room_post_id, $room_group);
         $this->attach_room_images($room_post_id, $room_group);
+        
+        // CRITICAL: Trigger Traveler hooks by updating the post
+        // This ensures the room appears in the hotel's room list
+        wp_update_post([
+            'ID' => $room_post_id,
+            'post_modified' => current_time('mysql'),
+            'post_modified_gmt' => current_time('mysql', 1)
+        ]);
+        
+        // Also clear any caches
+        clean_post_cache($room_post_id);
+        
+        // Trigger save_post action (this is what Traveler likely hooks into)
+        do_action('save_post', $room_post_id, get_post($room_post_id), false);
+        do_action('save_post_hotel_room', $room_post_id, get_post($room_post_id), false);
         
         rh_log('Room created', [
             'room_post_id' => $room_post_id,
