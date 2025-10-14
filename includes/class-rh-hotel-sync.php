@@ -8,6 +8,11 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Don't redeclare if already exists
+if (class_exists('RH_Hotel_Sync')) {
+    return;
+}
+
 class RH_Hotel_Sync {
     
     private static $instance = null;
@@ -724,15 +729,19 @@ class RH_Hotel_Sync {
             return;
         }
         
+        // Delete existing records
         $wpdb->delete($table_name, [
             'post_id' => $room_post_id
         ]);
         
+        // Get room data
         $number_room = get_post_meta($room_post_id, 'number_room', true) ?: 1;
         $adult_number = get_post_meta($room_post_id, 'adult_number', true) ?: 2;
         $children_number = get_post_meta($room_post_id, 'children_number', true) ?: 2;
         $allow_full_day = get_post_meta($room_post_id, 'allow_full_day', true) ?: 'on';
+        $hotel_id = get_post_meta($room_post_id, 'room_hotel', true) ?: 0;
         
+        // Prepare bulk insert with CORRECT field names for Traveler
         $values = [];
         $start_date = strtotime('today');
         $end_date = strtotime('+365 days', $start_date);
@@ -741,34 +750,47 @@ class RH_Hotel_Sync {
             $check_in = $timestamp;
             $check_out = $timestamp + 86400;
             
+            // Match EXACT structure of wp_st_room_availability table
             $values[] = $wpdb->prepare(
-                "(%d, %d, %d, %s, %d, %s, NULL, %d, %d, %s, NULL, NULL, %d, %d)",
-                $room_post_id,
-                $check_in,
-                $check_out,
-                'hotel_room',
-                0,
-                'available',
-                $number_room,
-                $adult_number,
-                $allow_full_day,
-                $adult_number,
-                $children_number
+                "(%d, %d, %d, %d, %s, %d, %s, NULL, %d, %d, %s, %d, %d, %d, %d, %d, %d, %d)",
+                $room_post_id,          // post_id
+                $check_in,              // check_in
+                $check_out,             // check_out
+                $number_room,           // number
+                'hotel_room',           // post_type
+                0,                      // price
+                'available',            // status
+                0,                      // number_booked
+                $hotel_id,              // parent_id
+                $allow_full_day,        // allow_full_day
+                $number_room,           // number_end
+                1,                      // booking_period
+                1,                      // is_base
+                $adult_number,          // adult_number
+                $children_number,       // child_number
+                0,                      // adult_price
+                0                       // child_price
             );
         }
         
+        // Bulk insert in chunks of 100
         $chunks = array_chunk($values, 100);
         $inserted = 0;
         
         foreach ($chunks as $chunk) {
             $query = "INSERT INTO $table_name 
-                (post_id, check_in, check_out, post_type, price, status, priority, number, adult_number, allow_full_day, start_time, end_time, adult, children) 
+                (post_id, check_in, check_out, number, post_type, price, status, priority, number_booked, parent_id, allow_full_day, number_end, booking_period, is_base, adult_number, child_number, adult_price, child_price) 
                 VALUES " . implode(',', $chunk);
             
             $result = $wpdb->query($query);
             
             if ($result !== false) {
                 $inserted += $result;
+            } else {
+                rh_log('Room availability insert failed', [
+                    'room_post_id' => $room_post_id,
+                    'error' => $wpdb->last_error
+                ], 'error');
             }
         }
         
