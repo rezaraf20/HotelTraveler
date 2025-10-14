@@ -1,6 +1,6 @@
 <?php
 /**
- * Hotel Sync Class (Complete Version)
+ * Hotel Sync Class (Complete Fixed Version)
  * File: includes/class-rh-hotel-sync.php
  */
 
@@ -73,14 +73,12 @@ class RH_Hotel_Sync {
         $this->sync_hotel_rooms($post_id, $hotel_info);
         $this->save_hotel_mapping($post_id, $hotel_id, $hotel_hid);
         
-        // CRITICAL: Update hotel to trigger Traveler hooks
         wp_update_post([
             'ID' => $post_id,
             'post_modified' => current_time('mysql'),
             'post_modified_gmt' => current_time('mysql', 1)
         ]);
         
-        // Clear caches
         clean_post_cache($post_id);
         
         rh_log('Hotel synced successfully', [
@@ -128,8 +126,6 @@ class RH_Hotel_Sync {
     
     private function create_hotel_post($hotel_info) {
         $language = rh_get_current_language();
-        
-        // Format description from description_struct (structured)
         $description = $this->format_description($hotel_info);
         
         $post_data = [
@@ -152,13 +148,9 @@ class RH_Hotel_Sync {
         return $post_id;
     }
     
-    /**
-     * Format description from description_struct
-     */
     private function format_description($hotel_info) {
         $description = '';
         
-        // Try description_struct first (better format)
         if (!empty($hotel_info['description_struct'])) {
             foreach ($hotel_info['description_struct'] as $section) {
                 if (!empty($section['title'])) {
@@ -173,7 +165,6 @@ class RH_Hotel_Sync {
             }
         }
         
-        // Fallback to simple description
         if (empty($description) && !empty($hotel_info['description'])) {
             $description = '<p>' . esc_html($hotel_info['description']) . '</p>';
         }
@@ -182,7 +173,6 @@ class RH_Hotel_Sync {
     }
     
     private function save_hotel_meta($post_id, $hotel_info) {
-        // Basic info
         update_post_meta($post_id, '_ratehawk_hid', $hotel_info['hid'] ?? 0);
         update_post_meta($post_id, '_ratehawk_id', $hotel_info['id'] ?? '');
         update_post_meta($post_id, 'address', sanitize_text_field($hotel_info['address'] ?? ''));
@@ -206,49 +196,37 @@ class RH_Hotel_Sync {
             update_post_meta($post_id, 'email', sanitize_email($hotel_info['email']));
         }
         
-        // Region/Location
         if (!empty($hotel_info['region'])) {
             update_post_meta($post_id, '_rh_region', wp_json_encode($hotel_info['region']));
-            
-            // Save separately for easy access
             update_post_meta($post_id, '_rh_country', $hotel_info['region']['country_code'] ?? '');
             update_post_meta($post_id, '_rh_city', $hotel_info['region']['name'] ?? '');
         }
         
-        // Policies (structured)
         if (!empty($hotel_info['policy_struct'])) {
             update_post_meta($post_id, '_rh_policy_struct', wp_json_encode($hotel_info['policy_struct']));
-            
-            // Also save as readable text for Traveler "Hotel policy" field
             $policy_text = $this->format_policies($hotel_info['policy_struct']);
             update_post_meta($post_id, 'hotel_policy', $policy_text);
         }
         
-        // Metapolicy
         if (!empty($hotel_info['metapolicy_struct'])) {
             update_post_meta($post_id, '_rh_metapolicy', wp_json_encode($hotel_info['metapolicy_struct']));
         }
         
-        // Extra info
         if (!empty($hotel_info['metapolicy_extra_info'])) {
             update_post_meta($post_id, '_rh_extra_info', sanitize_textarea_field($hotel_info['metapolicy_extra_info']));
         }
         
-        // Payment methods
         if (!empty($hotel_info['payment_methods'])) {
             update_post_meta($post_id, '_rh_payment_methods', wp_json_encode($hotel_info['payment_methods']));
         }
         
-        // Keys pickup info
         if (!empty($hotel_info['keys_pickup'])) {
             update_post_meta($post_id, '_rh_keys_pickup', wp_json_encode($hotel_info['keys_pickup']));
         }
         
-        // Store full hotel data
         update_post_meta($post_id, '_rh_full_data', wp_json_encode($hotel_info));
         update_post_meta($post_id, '_rh_last_sync', current_time('mysql'));
         
-        // Traveler required fields
         update_post_meta($post_id, 'multi_location', 'off');
         update_post_meta($post_id, 'is_instant_booking', 'off');
         update_post_meta($post_id, 'booking_period', 1);
@@ -266,9 +244,6 @@ class RH_Hotel_Sync {
         update_post_meta($post_id, '_is_ratehawk_hotel', 1);
     }
     
-    /**
-     * Format policies as readable text
-     */
     private function format_policies($policy_struct) {
         $text = '';
         
@@ -393,7 +368,6 @@ class RH_Hotel_Sync {
             'post_id' => $post_id
         ], 'info');
         
-        // Try with custom headers first
         add_filter('http_request_args', function($args, $request_url) use ($url) {
             if ($request_url === $url) {
                 $args['headers'] = [
@@ -413,7 +387,6 @@ class RH_Hotel_Sync {
         
         remove_all_filters('http_request_args');
         
-        // If download_url failed with Bad Request, try cURL
         if (is_wp_error($tmp) && strpos($tmp->get_error_message(), 'Bad Request') !== false) {
             rh_log('download_url failed, trying cURL', ['url' => $url], 'info');
             $tmp = $this->download_with_curl($url);
@@ -464,9 +437,6 @@ class RH_Hotel_Sync {
         return $attachment_id;
     }
     
-    /**
-     * Download image using cURL (fallback method)
-     */
     private function download_with_curl($url) {
         if (!function_exists('curl_init')) {
             return new WP_Error('curl_missing', 'cURL is not available');
@@ -504,9 +474,6 @@ class RH_Hotel_Sync {
         return $tmp_file;
     }
     
-    /**
-     * Sync hotel rooms
-     */
     private function sync_hotel_rooms($hotel_post_id, $hotel_info) {
         if (empty($hotel_info['room_groups'])) {
             rh_log('No room groups', ['hotel_post_id' => $hotel_post_id], 'info');
@@ -520,7 +487,7 @@ class RH_Hotel_Sync {
         
         $synced_rooms = [];
         $room_count = 0;
-        $max_rooms = 9; // Process all rooms
+        $max_rooms = 9;
         
         foreach ($hotel_info['room_groups'] as $room_group) {
             if ($room_count >= $max_rooms) {
@@ -534,8 +501,7 @@ class RH_Hotel_Sync {
                     $synced_rooms[] = $room_post_id;
                     $room_count++;
                     
-                    // Small delay between rooms
-                    usleep(200000); // 0.2 seconds
+                    usleep(200000);
                 }
             } catch (Exception $e) {
                 rh_log('Room sync failed', [
@@ -632,20 +598,25 @@ class RH_Hotel_Sync {
         $this->save_room_facilities($room_post_id, $room_group);
         $this->attach_room_images($room_post_id, $room_group);
         
-        // CRITICAL: Trigger Traveler hooks by updating the post
-        // This ensures the room appears in the hotel's room list
         wp_update_post([
             'ID' => $room_post_id,
             'post_modified' => current_time('mysql'),
             'post_modified_gmt' => current_time('mysql', 1)
         ]);
         
-        // Also clear any caches
         clean_post_cache($room_post_id);
         
-        // Trigger save_post action (this is what Traveler likely hooks into)
         do_action('save_post', $room_post_id, get_post($room_post_id), false);
         do_action('save_post_hotel_room', $room_post_id, get_post($room_post_id), false);
+        
+        delete_transient('st_hotel_min_price_' . $hotel_post_id);
+        wp_cache_delete($hotel_post_id, 'posts');
+        wp_cache_delete($hotel_post_id, 'post_meta');
+        
+        if (function_exists('st_traveler_sync_availability')) {
+            st_traveler_sync_availability('hotel_room');
+            rh_log('Traveler sync availability called', ['room_id' => $room_post_id], 'info');
+        }
         
         rh_log('Room created', [
             'room_post_id' => $room_post_id,
@@ -680,8 +651,133 @@ class RH_Hotel_Sync {
         update_post_meta($room_post_id, 'discount_rate', 0);
         update_post_meta($room_post_id, 'allow_full_day', 'on');
         update_post_meta($room_post_id, 'calendar_default_state', 'available');
+        update_post_meta($room_post_id, 'default_state', 'available');
         update_post_meta($room_post_id, '_rh_room_full_data', wp_json_encode($room_group));
         update_post_meta($room_post_id, '_rh_last_sync', current_time('mysql'));
+        
+        update_post_meta($room_post_id, '_edit_last', get_current_user_id());
+        update_post_meta($room_post_id, '_edit_lock', time() . ':' . get_current_user_id());
+        update_post_meta($room_post_id, 'type_service', 'hotel_room');
+        update_post_meta($room_post_id, 'room_hotel', $hotel_post_id);
+        update_post_meta($room_post_id, 'hotel_id', $hotel_post_id);
+        update_post_meta($room_post_id, 'disable_adult_name', 'on');
+        update_post_meta($room_post_id, 'disable_children_name', 'on');
+        update_post_meta($room_post_id, 'price_unit', 'per_day');
+        update_post_meta($room_post_id, 'extra_price_unit', 'per_day');
+        update_post_meta($room_post_id, 'deposit_type', 'disallow');
+        update_post_meta($room_post_id, 'is_external_booking', 'off');
+        update_post_meta($room_post_id, 'allow_cancel', 'on');
+        update_post_meta($room_post_id, 'st_booking_option_type', 'instant');
+        update_post_meta($room_post_id, 'price_by_per_person', 'off');
+        update_post_meta($room_post_id, 'discount_type', 'percent');
+        update_post_meta($room_post_id, 'discount_type_no_day', 'percent');
+        update_post_meta($room_post_id, 'st_room_external_booking', 'off');
+        update_post_meta($room_post_id, 'st_allow_cancel', 'off');
+        update_post_meta($room_post_id, 'st_cancel_percent', 0);
+        update_post_meta($room_post_id, 'is_meta_payment_gateway_st_submit_form', 'on');
+        update_post_meta($room_post_id, 'rate_review', 0);
+        update_post_meta($room_post_id, 'multi_location', 'off');
+        
+        $this->generate_room_calendar($room_post_id);
+    }
+    
+    private function generate_room_calendar($room_post_id) {
+        $start_date = strtotime('today');
+        $end_date = strtotime('+365 days', $start_date);
+        
+        $calendar_data = [];
+        
+        for ($timestamp = $start_date; $timestamp <= $end_date; $timestamp = strtotime('+1 day', $timestamp)) {
+            $date_key = date('Y-m-d', $timestamp);
+            
+            $calendar_data[$date_key] = [
+                'status' => 'available',
+                'price' => 0,
+                'number' => 1,
+                'adult' => 2,
+                'children' => 2
+            ];
+        }
+        
+        update_post_meta($room_post_id, 'room_calendar', $calendar_data);
+        update_post_meta($room_post_id, '_room_calendar', serialize($calendar_data));
+        update_post_meta($room_post_id, '_has_calendar_data', 1);
+        update_post_meta($room_post_id, '_rh_calendar_placeholder', 1);
+        
+        $this->insert_room_availability($room_post_id);
+        
+        rh_log('Calendar placeholder generated', [
+            'room_post_id' => $room_post_id,
+            'days' => count($calendar_data)
+        ], 'info');
+    }
+    
+    private function insert_room_availability($room_post_id) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'st_room_availability';
+        
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") !== $table_name) {
+            rh_log('st_room_availability table does not exist', [
+                'room_post_id' => $room_post_id
+            ], 'warning');
+            return;
+        }
+        
+        $wpdb->delete($table_name, [
+            'post_id' => $room_post_id
+        ]);
+        
+        $number_room = get_post_meta($room_post_id, 'number_room', true) ?: 1;
+        $adult_number = get_post_meta($room_post_id, 'adult_number', true) ?: 2;
+        $children_number = get_post_meta($room_post_id, 'children_number', true) ?: 2;
+        $allow_full_day = get_post_meta($room_post_id, 'allow_full_day', true) ?: 'on';
+        
+        $values = [];
+        $start_date = strtotime('today');
+        $end_date = strtotime('+365 days', $start_date);
+        
+        for ($timestamp = $start_date; $timestamp <= $end_date; $timestamp = strtotime('+1 day', $timestamp)) {
+            $check_in = $timestamp;
+            $check_out = $timestamp + 86400;
+            
+            $values[] = $wpdb->prepare(
+                "(%d, %d, %d, %s, %d, %s, NULL, %d, %d, %s, NULL, NULL, %d, %d)",
+                $room_post_id,
+                $check_in,
+                $check_out,
+                'hotel_room',
+                0,
+                'available',
+                $number_room,
+                $adult_number,
+                $allow_full_day,
+                $adult_number,
+                $children_number
+            );
+        }
+        
+        $chunks = array_chunk($values, 100);
+        $inserted = 0;
+        
+        foreach ($chunks as $chunk) {
+            $query = "INSERT INTO $table_name 
+                (post_id, check_in, check_out, post_type, price, status, priority, number, adult_number, allow_full_day, start_time, end_time, adult, children) 
+                VALUES " . implode(',', $chunk);
+            
+            $result = $wpdb->query($query);
+            
+            if ($result !== false) {
+                $inserted += $result;
+            }
+        }
+        
+        rh_log('Room availability inserted', [
+            'room_post_id' => $room_post_id,
+            'records_inserted' => $inserted
+        ], 'info');
+        
+        return $inserted;
     }
     
     private function save_room_facilities($room_post_id, $room_group) {
@@ -710,10 +806,8 @@ class RH_Hotel_Sync {
     }
     
     private function attach_room_images($room_post_id, $room_group) {
-        // Try images_ext first (better format)
         $images = $room_group['images_ext'] ?? [];
         
-        // Fallback to images
         if (empty($images)) {
             $images = $room_group['images'] ?? [];
         }
@@ -736,13 +830,7 @@ class RH_Hotel_Sync {
         $gallery_ids = [];
         $featured_set = false;
         
-        rh_log('Starting room images download', [
-            'room_post_id' => $room_post_id,
-            'total_images' => count($images)
-        ], 'info');
-        
         foreach ($images as $index => $image_data) {
-            // Extract URL from different formats
             $image_url = '';
             
             if (is_string($image_data)) {
@@ -752,17 +840,10 @@ class RH_Hotel_Sync {
             }
             
             if (empty($image_url)) {
-                rh_log('Empty room image URL', [
-                    'room_post_id' => $room_post_id,
-                    'index' => $index,
-                    'data' => $image_data
-                ], 'warning');
                 continue;
             }
             
-            // Fix {size} placeholder with VALID sizes for Ratehawk CDN
             if (strpos($image_url, '{size}') !== false) {
-                // Try multiple valid sizes in order of preference
                 $valid_sizes = ['1024x768', '640x400', 'orig'];
                 $download_success = false;
                 
@@ -770,13 +851,6 @@ class RH_Hotel_Sync {
                     $test_url = str_replace('{size}', $size, $image_url);
                     
                     try {
-                        rh_log('Attempting room image download', [
-                            'room_post_id' => $room_post_id,
-                            'url' => substr($test_url, 0, 100),
-                            'size' => $size,
-                            'index' => $index
-                        ], 'info');
-                        
                         $attachment_id = $this->download_image($test_url, $room_post_id);
                         
                         if ($attachment_id && !is_wp_error($attachment_id)) {
@@ -787,41 +861,15 @@ class RH_Hotel_Sync {
                                 $featured_set = true;
                             }
                             
-                            rh_log('Room image downloaded successfully', [
-                                'room_post_id' => $room_post_id,
-                                'attachment_id' => $attachment_id,
-                                'size' => $size,
-                                'index' => $index
-                            ], 'info');
-                            
                             $download_success = true;
-                            break; // Success! No need to try other sizes
+                            break;
                         }
                     } catch (Exception $e) {
-                        rh_log('Room image failed with size ' . $size, [
-                            'room_post_id' => $room_post_id,
-                            'url' => substr($test_url, 0, 100),
-                            'error' => $e->getMessage()
-                        ], 'warning');
-                        // Try next size
                         continue;
                     }
                 }
-                
-                if (!$download_success) {
-                    rh_log('All sizes failed for room image', [
-                        'room_post_id' => $room_post_id,
-                        'original_url' => substr($image_url, 0, 100)
-                    ], 'warning');
-                }
             } else {
-                // URL doesn't have {size} placeholder, use as-is
                 try {
-                    rh_log('Attempting room image download (no size)', [
-                        'room_post_id' => $room_post_id,
-                        'url' => substr($image_url, 0, 100)
-                    ], 'info');
-                    
                     $attachment_id = $this->download_image($image_url, $room_post_id);
                     
                     if ($attachment_id && !is_wp_error($attachment_id)) {
@@ -831,23 +879,13 @@ class RH_Hotel_Sync {
                             set_post_thumbnail($room_post_id, $attachment_id);
                             $featured_set = true;
                         }
-                        
-                        rh_log('Room image downloaded successfully', [
-                            'room_post_id' => $room_post_id,
-                            'attachment_id' => $attachment_id
-                        ], 'info');
                     }
                 } catch (Exception $e) {
-                    rh_log('Room image exception', [
-                        'room_post_id' => $room_post_id,
-                        'url' => substr($image_url, 0, 100),
-                        'error' => $e->getMessage()
-                    ], 'warning');
+                    // Continue
                 }
             }
             
-            // Small delay to avoid overwhelming the server
-            usleep(100000); // 0.1 second
+            usleep(100000);
         }
         
         if (!empty($gallery_ids)) {
@@ -857,10 +895,6 @@ class RH_Hotel_Sync {
                 'room_post_id' => $room_post_id,
                 'total_images' => count($gallery_ids)
             ], 'info');
-        } else {
-            rh_log('No room images were downloaded', [
-                'room_post_id' => $room_post_id
-            ], 'warning');
         }
     }
     
@@ -919,9 +953,6 @@ class RH_Hotel_Sync {
         ];
     }
     
-    /**
-     * Cleanup orphaned mapping records
-     */
     private function cleanup_orphaned_mappings() {
         global $wpdb;
         
@@ -942,9 +973,6 @@ class RH_Hotel_Sync {
         }
     }
     
-    /**
-     * AJAX: Sync test hotel
-     */
     public function ajax_sync_test_hotel() {
         check_ajax_referer('ratehawk_admin_nonce', 'nonce');
         
@@ -953,7 +981,6 @@ class RH_Hotel_Sync {
         }
         
         try {
-            // Cleanup orphaned records first
             $this->cleanup_orphaned_mappings();
             
             $result = $this->sync_test_hotel();
@@ -963,9 +990,6 @@ class RH_Hotel_Sync {
         }
     }
     
-    /**
-     * AJAX: Sync single hotel
-     */
     public function ajax_sync_single_hotel() {
         check_ajax_referer('ratehawk_admin_nonce', 'nonce');
         
