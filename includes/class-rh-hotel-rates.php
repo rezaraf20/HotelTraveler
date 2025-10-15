@@ -22,32 +22,23 @@ class RH_Hotel_Rates {
     }
     
     private function __construct() {
-        // فقط برای صفحات single hotel
         add_action('wp_enqueue_scripts', [$this, 'enqueue_assets']);
-        
-        // نمایش فرم و قیمت‌ها بعد از محتوای هتل
         add_action('st_after_hotel_content', [$this, 'display_rates_section'], 10);
-        
-        // اگر hook بالا کار نکرد، از این استفاده کن
         add_filter('the_content', [$this, 'append_rates_to_content']);
         
-        // AJAX handler
         add_action('wp_ajax_rh_get_hotel_rates', [$this, 'ajax_get_rates']);
         add_action('wp_ajax_nopriv_rh_get_hotel_rates', [$this, 'ajax_get_rates']);
     }
     
     public function enqueue_assets() {
-        // فقط در صفحه single hotel
         if (!is_singular('st_hotel')) {
             return;
         }
         
-        // فقط برای هتل‌های Ratehawk
         if (!rh_is_ratehawk_hotel(get_the_ID())) {
             return;
         }
         
-        // FontAwesome
         wp_enqueue_style(
             'font-awesome',
             'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css',
@@ -55,7 +46,6 @@ class RH_Hotel_Rates {
             '5.15.4'
         );
         
-        // CSS
         wp_enqueue_style(
             'rh-rates',
             RH_PLUGIN_URL . 'public/assets/css/rates.css',
@@ -63,7 +53,6 @@ class RH_Hotel_Rates {
             RH_VERSION
         );
         
-        // JS
         wp_enqueue_script(
             'rh-rates',
             RH_PLUGIN_URL . 'public/assets/js/rates.js',
@@ -72,7 +61,6 @@ class RH_Hotel_Rates {
             true
         );
         
-        // Localize
         wp_localize_script('rh-rates', 'rhRates', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('rh_rates_nonce'),
@@ -83,9 +71,6 @@ class RH_Hotel_Rates {
         ]);
     }
     
-    /**
-     * نمایش بخش قیمت‌ها
-     */
     public function display_rates_section() {
         if (!is_singular('st_hotel')) {
             return;
@@ -98,9 +83,6 @@ class RH_Hotel_Rates {
         $this->render_rates_html();
     }
     
-    /**
-     * اضافه کردن به محتوا (fallback)
-     */
     public function append_rates_to_content($content) {
         if (!is_singular('st_hotel') || !in_the_loop() || !is_main_query()) {
             return $content;
@@ -110,7 +92,6 @@ class RH_Hotel_Rates {
             return $content;
         }
         
-        // اگر قبلاً نمایش داده شده، دوباره نمایش نده
         if (did_action('st_after_hotel_content')) {
             return $content;
         }
@@ -122,9 +103,6 @@ class RH_Hotel_Rates {
         return $content . $rates_html;
     }
     
-    /**
-     * رندر HTML
-     */
     private function render_rates_html() {
         $hotel_id = get_the_ID();
         $hid = rh_get_hotel_hid($hotel_id);
@@ -133,7 +111,6 @@ class RH_Hotel_Rates {
             return;
         }
         
-        // پارامترهای پیش‌فرض
         $checkin = isset($_GET['checkin']) ? sanitize_text_field($_GET['checkin']) : date('Y-m-d', strtotime('+1 day'));
         $checkout = isset($_GET['checkout']) ? sanitize_text_field($_GET['checkout']) : date('Y-m-d', strtotime('+2 days'));
         $adults = isset($_GET['adults']) ? absint($_GET['adults']) : 2;
@@ -215,17 +192,29 @@ class RH_Hotel_Rates {
         <?php
     }
     
-    /**
-     * AJAX: دریافت قیمت‌ها
-     */
     public function ajax_get_rates() {
-        check_ajax_referer('rh_rates_nonce', 'nonce');
+        // Debug: Log request
+        rh_log('AJAX Request Received', $_POST, 'debug');
+        
+        // Check nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'rh_rates_nonce')) {
+            rh_log('Nonce verification failed', ['nonce' => $_POST['nonce'] ?? 'missing'], 'error');
+            wp_send_json_error(__('Security check failed', 'ratehawk-traveler'));
+        }
         
         $hotel_id = absint($_POST['hotel_id'] ?? 0);
         $checkin = sanitize_text_field($_POST['checkin'] ?? '');
         $checkout = sanitize_text_field($_POST['checkout'] ?? '');
         $adults = absint($_POST['adults'] ?? 2);
         $children = isset($_POST['children']) ? array_map('absint', (array)$_POST['children']) : [];
+        
+        rh_log('AJAX Parameters', [
+            'hotel_id' => $hotel_id,
+            'checkin' => $checkin,
+            'checkout' => $checkout,
+            'adults' => $adults,
+            'children' => $children
+        ], 'debug');
         
         if (!$hotel_id || !$checkin || !$checkout) {
             wp_send_json_error(__('Invalid parameters', 'ratehawk-traveler'));
@@ -240,7 +229,6 @@ class RH_Hotel_Rates {
             wp_send_json_error(__('Hotel ID not found', 'ratehawk-traveler'));
         }
         
-        // Cache
         $cache_key = "rates_{$hid}_{$checkin}_{$checkout}_{$adults}_" . md5(json_encode($children));
         $cached = rh_cache()->get($cache_key, 'hotel_page');
         
@@ -292,9 +280,6 @@ class RH_Hotel_Rates {
         }
     }
     
-    /**
-     * پردازش قیمت‌ها
-     */
     private function process_rates($hotel_data) {
         $rates = [];
         
@@ -381,5 +366,3 @@ class RH_Hotel_Rates {
         ];
     }
 }
-
-// خودکار اجرا نمیشه، باید از main plugin صدا بزنیم
