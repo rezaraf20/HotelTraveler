@@ -1,0 +1,309 @@
+/* public/assets/css/rates.css */
+
+/* Container */
+.rh-rates-wrapper {
+    margin: 40px 0;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Header */
+.rh-rates-header {
+    padding: 25px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    text-align: center;
+}
+
+.rh-rates-header h2 {
+    margin: 0 0 5px;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.rh-rates-header p {
+    margin: 0;
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+/* Search Form */
+.rh-rates-search-form {
+    padding: 25px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.rh-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    align-items: end;
+}
+
+.rh-form-field {
+    display: flex;
+    flex-direction: column;
+}
+
+.rh-form-field label {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #495057;
+}
+
+.rh-form-field input,
+.rh-form-field select {
+    padding: 10px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.rh-form-field input:focus,
+.rh-form-field select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.rh-search-btn {
+    width: 100%;
+    padding: 11px 20px;
+    background: #667eea;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.rh-search-btn:hover {
+    background: #5568d3;
+    transform: translateY(-1px);
+}
+
+.rh-search-btn:disabled {
+    background: #adb5bd;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Children Ages */
+#rh-children-ages {
+    margin-top: 15px;
+    padding: 15px;
+    background: #fff;
+    border-radius: 4px;
+}
+
+#rh-children-ages label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: 600;
+    color: #495057;
+}
+
+#rh-children-ages-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+}
+
+#rh-children-ages-fields select {
+    padding: 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+/* Results */
+#rh-rates-results {
+    padding: 25px;
+    min-height: 200px;
+}
+
+.rh-rates-loading,
+.rh-rates-error {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.rh-rates-loading {
+    color: #667eea;
+    font-size: 16px;
+}
+
+.rh-rates-loading i {
+    font-size: 32px;
+    margin-bottom: 15px;
+    display: block;
+}
+
+.rh-rates-error {
+    color: #dc3545;
+}
+
+/* Rate Items */
+.rh-rates-list {
+    display: grid;
+    gap: 15px;
+}
+
+.rh-rate-item {
+    display: grid;
+    grid-template-columns: 2fr 1fr auto;
+    gap: 20px;
+    padding: 20px;
+    border: 2px solid #e5e5e5;
+    border-radius: 8px;
+    transition: all 0.3s;
+    align-items: center;
+    background: #fff;
+}
+
+.rh-rate-item:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
+    transform: translateY(-2px);
+}
+
+.rh-rate-info h4 {
+    margin: 0 0 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #212529;
+}
+
+.rh-rate-meal {
+    display: inline-block;
+    padding: 5px 12px;
+    background: #e7f3ff;
+    color: #0066cc;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.rh-rate-cancellation {
+    font-size: 14px;
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+.rh-rate-cancellation i {
+    margin-right: 5px;
+}
+
+.rh-rate-cancellation.free {
+    color: #28a745;
+    font-weight: 600;
+}
+
+.rh-rate-cancellation.non-refundable {
+    color: #dc3545;
+}
+
+.rh-rate-cancellation.paid {
+    color: #ffc107;
+}
+
+.rh-rate-price {
+    text-align: right;
+}
+
+.rh-rate-price-amount {
+    font-size: 32px;
+    font-weight: 700;
+    color: #667eea;
+    line-height: 1;
+}
+
+.rh-rate-price-label {
+    font-size: 13px;
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+.rh-rate-action {
+    text-align: right;
+}
+
+.rh-book-now-btn {
+    padding: 12px 30px;
+    background: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+
+.rh-book-now-btn:hover {
+    background: #218838;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+}
+
+/* No Rates */
+.rh-no-rates {
+    text-align: center;
+    padding: 80px 20px;
+}
+
+.rh-no-rates i {
+    font-size: 64px;
+    color: #dee2e6;
+    margin-bottom: 20px;
+    display: block;
+}
+
+.rh-no-rates p {
+    font-size: 16px;
+    color: #6c757d;
+    margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .rh-form-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .rh-rate-item {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+    
+    .rh-rate-price,
+    .rh-rate-action {
+        text-align: center;
+    }
+    
+    .rh-book-now-btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 576px) {
+    .rh-form-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .rh-rates-header h2 {
+        font-size: 20px;
+    }
+    
+    .rh-rate-price-amount {
+        font-size: 28px;
+    }
+}
