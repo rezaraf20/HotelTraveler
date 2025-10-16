@@ -1,0 +1,298 @@
+/**
+ * Ratehawk Traveler Form Integration Styles
+ */
+
+/* Container */
+#rh-rates-container {
+    margin-top: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+/* Loading */
+.rh-rates-loading {
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 18px;
+    color: #666;
+}
+
+.rh-rates-loading i {
+    font-size: 24px;
+    margin-right: 10px;
+    color: #007bff;
+}
+
+/* Error */
+.rh-rates-error {
+    text-align: center;
+    padding: 30px 20px;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 6px;
+    color: #856404;
+    font-size: 16px;
+}
+
+.rh-rates-error i {
+    font-size: 20px;
+    margin-right: 8px;
+}
+
+/* Results */
+.rh-rates-results {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.rh-rates-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #3498db;
+}
+
+/* Grid */
+.rh-rates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+@media (max-width: 768px) {
+    .rh-rates-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Rate Card */
+.rh-rate-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+}
+
+.rh-rate-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, #3498db, #2ecc71);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.rh-rate-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    transform: translateY(-4px);
+}
+
+.rh-rate-card:hover::before {
+    transform: scaleX(1);
+}
+
+/* Header */
+.rh-rate-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+    gap: 10px;
+}
+
+.rh-room-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0;
+    flex: 1;
+    line-height: 1.4;
+}
+
+.rh-meal-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: #e8f5e9;
+    color: #2e7d32;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Features */
+.rh-rate-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 15px 0;
+}
+
+.rh-rate-features li {
+    padding: 6px 0;
+    font-size: 14px;
+    color: #555;
+    display: flex;
+    align-items: center;
+}
+
+.rh-rate-features li i {
+    color: #2ecc71;
+    margin-right: 8px;
+    font-size: 12px;
+}
+
+/* Price */
+.rh-rate-price {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+    text-align: center;
+}
+
+.rh-price-main {
+    font-size: 32px;
+    font-weight: 700;
+    color: #e74c3c;
+    line-height: 1;
+    margin-bottom: 5px;
+}
+
+.rh-price-detail {
+    font-size: 13px;
+    color: #7f8c8d;
+}
+
+/* Cancellation */
+.rh-cancellation {
+    padding: 10px;
+    background: #fff3cd;
+    border-left: 3px solid #ffc107;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #856404;
+    margin-bottom: 15px;
+}
+
+.rh-cancellation i {
+    margin-right: 6px;
+}
+
+/* Book Button */
+.rh-book-button {
+    width: 100%;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: auto;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.rh-book-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.rh-book-button:active {
+    transform: translateY(0);
+}
+
+.rh-btn-icon {
+    font-size: 18px;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    #rh-rates-container {
+        padding: 15px;
+        margin-top: 20px;
+    }
+    
+    .rh-rates-title {
+        font-size: 20px;
+    }
+    
+    .rh-rate-card {
+        padding: 15px;
+    }
+    
+    .rh-room-name {
+        font-size: 16px;
+    }
+    
+    .rh-price-main {
+        font-size: 28px;
+    }
+    
+    .rh-book-button {
+        padding: 12px 20px;
+        font-size: 15px;
+    }
+}
+
+/* Animation for meal badge */
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.rh-meal-badge {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+/* Best price indicator */
+.rh-rate-card:first-child::after {
+    content: '🏆 Best Price';
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(245, 87, 108, 0.3);
+}
+
+/* Smooth transitions */
+* {
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
