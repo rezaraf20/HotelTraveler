@@ -57,10 +57,26 @@ class RH_Prebook {
             true
         );
         
+        // تشخیص URL checkout بر اساس قالب Traveler
+        $checkout_url = home_url('/'); // پیش‌فرض
+        
+        // اگر Traveler دارد صفحه checkout خاص خودش را داشته باشد
+        if (function_exists('st_get_option')) {
+            $checkout_page = st_get_option('page_checkout');
+            if ($checkout_page) {
+                $checkout_url = get_permalink($checkout_page);
+            }
+        }
+        
+        // اگر WooCommerce نصب است
+        if (function_exists('wc_get_checkout_url')) {
+            $checkout_url = wc_get_checkout_url();
+        }
+        
         wp_localize_script('rh-prebook', 'rhPrebook', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('rh_prebook'),
-            'checkoutUrl' => wc_get_checkout_url(), // اگر WooCommerce داری
+            'checkoutUrl' => $checkout_url,
             'strings' => array(
                 'processing' => __('Processing...', 'ratehawk-traveler'),
                 'priceChanged' => __('Price has changed!', 'ratehawk-traveler'),
