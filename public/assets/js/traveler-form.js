@@ -12,6 +12,16 @@
     $(document).ready(function() {
         console.log('🔥 Ratehawk Form Handler Loaded');
         
+        // صبر کن تا Traveler scripts load بشه
+        setTimeout(function() {
+            initFormHandler();
+        }, 1000);
+    });
+    
+    /**
+     * Initialize Form Handler
+     */
+    function initFormHandler() {
         // پیدا کردن فرم Traveler
         var $form = $('.form-check-availability-hotel');
         
@@ -22,16 +32,23 @@
         
         console.log('✅ Found Traveler form:', $form);
         
-        // Override submit event
-        $form.off('submit').on('submit', function(e) {
+        // حذف تمام event handlers قبلی
+        $form.off('submit');
+        
+        // اضافه کردن handler جدید
+        $form.on('submit', function(e) {
             e.preventDefault();
+            e.stopImmediatePropagation();
+            
             console.log('🚀 Form submitted - Fetching Ratehawk rates...');
             
             handleFormSubmit($(this));
             
             return false;
         });
-    });
+        
+        console.log('✅ Form handler attached');
+    }
     
     /**
      * مدیریت submit فرم
