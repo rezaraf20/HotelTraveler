@@ -1,0 +1,527 @@
+/**
+ * Ratehawk Prebook Styles
+ * استایل‌های Modal، Timer و انیمیشن‌ها
+ */
+
+/* ========== Modal ========== */
+.rh-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.rh-modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.rh-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+}
+
+.rh-modal-content {
+    position: relative;
+    background: white;
+    border-radius: 16px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.rh-modal.active .rh-modal-content {
+    transform: scale(1);
+}
+
+/* ========== Modal Header ========== */
+.rh-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 30px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.rh-modal-header h2 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    color: #2c3e50;
+}
+
+.rh-modal-close {
+    background: none;
+    border: none;
+    font-size: 32px;
+    color: #95a5a6;
+    cursor: pointer;
+    transition: color 0.2s ease, transform 0.2s ease;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.rh-modal-close:hover {
+    color: #e74c3c;
+    background: #fee;
+    transform: rotate(90deg);
+}
+
+/* ========== Modal Body ========== */
+.rh-modal-body {
+    padding: 30px;
+}
+
+/* ========== Price Change Alert ========== */
+.rh-price-change-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    animation: slideIn 0.5s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.rh-price-change-alert.price-increase {
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+}
+
+.rh-price-change-alert.price-decrease {
+    background: #d4edda;
+    border: 2px solid #28a745;
+}
+
+.rh-alert-icon {
+    font-size: 36px;
+    flex-shrink: 0;
+}
+
+.rh-alert-content {
+    flex: 1;
+}
+
+.rh-alert-content strong {
+    display: block;
+    font-size: 18px;
+    margin-bottom: 5px;
+    color: #2c3e50;
+}
+
+.rh-alert-content p {
+    margin: 0 0 10px 0;
+    color: #555;
+    font-size: 14px;
+}
+
+.rh-price-comparison {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.rh-old-price {
+    text-decoration: line-through;
+    color: #95a5a6;
+}
+
+.rh-arrow {
+    color: #3498db;
+    font-size: 20px;
+}
+
+.rh-new-price {
+    color: #e74c3c;
+}
+
+/* ========== Booking Summary ========== */
+.rh-booking-summary {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+}
+
+.rh-booking-summary h3 {
+    margin: 0 0 5px 0;
+    font-size: 20px;
+    color: #2c3e50;
+}
+
+.rh-booking-summary h4 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    color: #7f8c8d;
+    font-weight: 500;
+}
+
+.rh-price-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    border-top: 2px dashed #dee2e6;
+    margin-top: 15px;
+}
+
+.rh-price-label {
+    font-size: 16px;
+    color: #555;
+}
+
+.rh-price-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: #e74c3c;
+}
+
+/* ========== Cancellation Info ========== */
+.rh-cancellation-info {
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rh-cancellation-info i {
+    font-size: 20px;
+}
+
+.rh-cancellation-info.free {
+    background: #d4edda;
+    border-left: 4px solid #28a745;
+    color: #155724;
+}
+
+.rh-cancellation-info.non-refundable {
+    background: #f8d7da;
+    border-left: 4px solid #dc3545;
+    color: #721c24;
+}
+
+.rh-cancellation-info strong {
+    display: block;
+    margin-bottom: 3px;
+}
+
+.rh-cancellation-info p {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+/* ========== Countdown Section ========== */
+.rh-countdown-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+}
+
+.rh-countdown-label {
+    font-size: 16px;
+    margin-bottom: 15px;
+    opacity: 0.9;
+}
+
+.rh-countdown-label i {
+    margin-right: 8px;
+}
+
+.rh-countdown-timer {
+    font-size: 64px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    margin-bottom: 15px;
+    font-family: 'Courier New', monospace;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.rh-countdown-timer.warning {
+    animation: pulse 1s ease-in-out infinite;
+    color: #ff6b6b;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.rh-countdown-warning {
+    font-size: 14px;
+    opacity: 0.8;
+    transition: all 0.3s ease;
+}
+
+.rh-countdown-warning.urgent {
+    opacity: 1;
+    font-weight: 600;
+    animation: blink 1s ease-in-out infinite;
+}
+
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* ========== Modal Footer ========== */
+.rh-modal-footer {
+    display: flex;
+    gap: 15px;
+    padding: 24px 30px;
+    border-top: 2px solid #f0f0f0;
+    background: #fafafa;
+    border-radius: 0 0 16px 16px;
+}
+
+.rh-modal-footer button {
+    flex: 1;
+    padding: 14px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.rh-btn-secondary {
+    background: white;
+    color: #555;
+    border: 2px solid #dee2e6;
+}
+
+.rh-btn-secondary:hover {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+.rh-btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.rh-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.rh-btn-primary:active {
+    transform: translateY(0);
+}
+
+/* ========== Expired Message ========== */
+.rh-expired-message {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.rh-expired-icon {
+    font-size: 80px;
+    margin-bottom: 20px;
+    animation: swing 1s ease-in-out;
+}
+
+@keyframes swing {
+    0%, 100% {
+        transform: rotate(0deg);
+    }
+    25% {
+        transform: rotate(-10deg);
+    }
+    75% {
+        transform: rotate(10deg);
+    }
+}
+
+.rh-expired-message h3 {
+    font-size: 24px;
+    color: #e74c3c;
+    margin-bottom: 10px;
+}
+
+.rh-expired-message p {
+    color: #7f8c8d;
+    margin-bottom: 30px;
+}
+
+.rh-expired-message button {
+    padding: 14px 32px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.rh-expired-message button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* ========== Error Toast ========== */
+.rh-error-toast {
+    position: fixed;
+    bottom: -100px;
+    right: 20px;
+    background: #dc3545;
+    color: white;
+    padding: 16px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 1000000;
+    transition: bottom 0.3s ease;
+    max-width: 400px;
+}
+
+.rh-error-toast.show {
+    bottom: 20px;
+}
+
+.rh-error-toast i {
+    font-size: 20px;
+}
+
+/* ========== Loading State ========== */
+.rh-book-button.loading {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ========== Responsive ========== */
+@media (max-width: 768px) {
+    .rh-modal-content {
+        width: 95%;
+        max-height: 95vh;
+    }
+    
+    .rh-modal-header {
+        padding: 20px;
+    }
+    
+    .rh-modal-header h2 {
+        font-size: 22px;
+    }
+    
+    .rh-modal-body {
+        padding: 20px;
+    }
+    
+    .rh-countdown-timer {
+        font-size: 48px;
+    }
+    
+    .rh-modal-footer {
+        flex-direction: column;
+        padding: 20px;
+    }
+    
+    .rh-modal-footer button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .rh-modal-content {
+        width: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+    
+    .rh-countdown-timer {
+        font-size: 40px;
+        letter-spacing: 2px;
+    }
+    
+    .rh-price-value {
+        font-size: 28px;
+    }
+    
+    .rh-error-toast {
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
+}
+
+/* ========== Print Styles ========== */
+@media print {
+    .rh-modal {
+        display: none;
+    }
+}
+
+/* ========== Accessibility ========== */
+.rh-modal-content:focus {
+    outline: 3px solid #667eea;
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rh-modal,
+    .rh-modal-content,
+    .rh-price-change-alert,
+    * {
+        animation: none !important;
+        transition: none !important;
+    }
+}
