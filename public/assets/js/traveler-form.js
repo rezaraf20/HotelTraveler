@@ -1,6 +1,6 @@
 /**
  * Ratehawk Traveler Form Integration
- * اتصال به فرم Check Availability قالب Traveler و نمایش قیمت‌های زنده
+ * Override کردن دکمه‌های "Show Price" و نمایش قیمت‌های Ratehawk
  */
 
 (function($) {
@@ -10,72 +10,89 @@
      * Initialize
      */
     $(document).ready(function() {
-        console.log('🔥 Ratehawk Form Handler Loaded');
+        console.log('🔥 Ratehawk Show Price Handler Loaded');
         
-        // صبر کن تا Traveler scripts load بشه
+        // صبر کن تا صفحه کامل load بشه
         setTimeout(function() {
-            initFormHandler();
-        }, 1000);
+            initShowPriceHandler();
+        }, 500);
     });
     
     /**
-     * Initialize Form Handler
+     * Initialize Show Price Handler
      */
-    function initFormHandler() {
-        // پیدا کردن فرم Traveler
-        var $form = $('.form-check-availability-hotel');
+    function initShowPriceHandler() {
+        console.log('🎯 Initializing Show Price override...');
         
-        if ($form.length === 0) {
-            console.warn('⚠️ Traveler form not found');
-            return;
-        }
-        
-        console.log('✅ Found Traveler form:', $form);
-        
-        // حذف تمام event handlers قبلی
-        $form.off('submit');
+        // حذف تمام event handlers قبلی از دکمه‌های Show Price
+        $('.btn-show-price').off('click');
         
         // اضافه کردن handler جدید
-        $form.on('submit', function(e) {
+        $(document).on('click', '.btn-show-price', function(e) {
             e.preventDefault();
             e.stopImmediatePropagation();
             
-            console.log('🚀 Form submitted - Fetching Ratehawk rates...');
+            console.log('🚀 Show Price clicked - Loading Ratehawk rates...');
             
-            handleFormSubmit($(this));
+            handleShowPriceClick($(this));
             
             return false;
         });
         
-        console.log('✅ Form handler attached');
+        console.log('✅ Show Price handler attached to', $('.btn-show-price').length, 'buttons');
     }
     
     /**
-     * مدیریت submit فرم
+     * مدیریت کلیک روی Show Price
      */
-    function handleFormSubmit($form) {
+    function handleShowPriceClick($button) {
+        var $form = $button.closest('form.form-booking-inpage');
+        
+        if ($form.length === 0) {
+            console.error('❌ Form not found');
+            return;
+        }
+        
+        // دریافت تاریخ‌ها - اول از فرم اتاق، بعد از فرم بالا
+        var checkin = $form.find('input[name="check_in"]').val() || 
+                     $form.find('input[name="start"]').val() ||
+                     $('.form-check-availability-hotel input[name="start"]').val();
+                     
+        var checkout = $form.find('input[name="check_out"]').val() || 
+                      $form.find('input[name="end"]').val() ||
+                      $('.form-check-availability-hotel input[name="end"]').val();
+        
+        // اگر هنوز تاریخ نداریم، از کاربر بخواه
+        if (!checkin || !checkout) {
+            showError('Please select check-in and check-out dates first');
+            resetButton($button);
+            return;
+        }
+        
         // دریافت داده‌های فرم
         var formData = {
             action: 'rh_get_room_rates',
             nonce: rhTravelerForm.nonce,
             hotel_id: rhTravelerForm.hotelId,
-            checkin: $form.find('input[name="start"]').val(),
-            checkout: $form.find('input[name="end"]').val(),
-            adults: parseInt($form.find('input[name="adult_number"]').val()) || 1,
-            children: parseInt($form.find('input[name="child_number"]').val()) || 0,
-            rooms: parseInt($form.find('input[name="room_num_search"]').val()) || 1
+            room_id: $form.find('input[name="room_id"]').val(),
+            checkin: checkin,
+            checkout: checkout,
+            adults: parseInt($form.find('input[name="adult_number"]').val()) || 
+                   parseInt($('.form-check-availability-hotel input[name="adult_number"]').val()) || 2,
+            children: parseInt($form.find('input[name="child_number"]').val()) || 
+                     parseInt($('.form-check-availability-hotel input[name="child_number"]').val()) || 0
         };
         
-        console.log('📤 Sending request:', formData);
+        console.log('📤 Request data:', formData);
         
         // Validation
-        if (!formData.checkin || !formData.checkout) {
-            showError('Please select check-in and check-out dates');
+        if (!formData.room_id) {
+            showError('Room ID not found');
             return;
         }
         
-        // نمایش loading
-        showLoading();
+        // نمایش loading در جای دکمه
+        showLoading($button);
         
         // ارسال درخواست AJAX
         $.ajax({
@@ -83,17 +100,19 @@
             type: 'POST',
             data: formData,
             success: function(response) {
-                console.log('📥 Response received:', response);
+                console.log('📥 Response:', response);
                 
                 if (response.success) {
-                    displayRates(response.data);
+                    displayRates($button, response.data, formData.room_id);
                 } else {
                     showError(response.data || 'Unknown error');
+                    resetButton($button);
                 }
             },
             error: function(xhr, status, error) {
                 console.error('❌ AJAX Error:', error);
                 showError('Network error: ' + error);
+                resetButton($button);
             }
         });
     }
@@ -101,99 +120,107 @@
     /**
      * نمایش loading
      */
-    function showLoading() {
-        var html = '<div class="rh-rates-loading">' +
-                   '<i class="fa fa-spinner fa-spin"></i> ' +
-                   rhTravelerForm.loadingText +
-                   '</div>';
-        
-        $('#rh-rates-container').remove();
-        $('.form-check-availability-hotel').after('<div id="rh-rates-container">' + html + '</div>');
+    function showLoading($button) {
+        $button.prop('disabled', true)
+               .html('<i class="fa fa-spinner fa-spin"></i> Loading...')
+               .addClass('loading');
+    }
+    
+    /**
+     * بازگرداندن دکمه به حالت اولیه
+     */
+    function resetButton($button) {
+        $button.prop('disabled', false)
+               .html('Show Price')
+               .removeClass('loading');
     }
     
     /**
      * نمایش قیمت‌ها
      */
-    function displayRates(rates) {
-        console.log('🎨 Displaying rates:', rates);
+    function displayRates($button, rates, roomId) {
+        console.log('🎨 Displaying', rates.length, 'rates');
         
         if (!rates || rates.length === 0) {
             showError(rhTravelerForm.noRatesText);
+            resetButton($button);
             return;
         }
         
-        var html = '<div class="rh-rates-results">';
-        html += '<h3 class="rh-rates-title">✅ ' + rates.length + ' Available Rates</h3>';
-        html += '<div class="rh-rates-grid">';
+        var $item = $button.closest('.item');
+        var $priceContainer = $item.find('.col-xs-12.col-md-4').first();
+        
+        // ساخت HTML قیمت‌ها
+        var html = '<div class="rh-rates-display">';
+        html += '<h4 class="rh-rates-title">Available Rates:</h4>';
         
         rates.forEach(function(rate, index) {
-            html += buildRateCard(rate, index);
+            html += buildRateItem(rate, index);
         });
         
         html += '</div>';
-        html += '</div>';
         
-        $('#rh-rates-container').html(html);
+        // جایگزینی محتوا
+        $priceContainer.html(html);
         
-        // Smooth scroll به نتایج
+        // Smooth scroll
         $('html, body').animate({
-            scrollTop: $('#rh-rates-container').offset().top - 100
+            scrollTop: $item.offset().top - 100
         }, 500);
     }
     
     /**
-     * ساخت کارت قیمت
+     * ساخت یک آیتم قیمت
      */
-    function buildRateCard(rate, index) {
+    function buildRateItem(rate, index) {
         var priceDisplay = formatPrice(rate.price, rate.currency);
-        var nights = rate.nights || 1;
-        var pricePerNight = rate.price / nights;
+        var pricePerNight = rate.price / rate.nights;
         
-        var html = '<div class="rh-rate-card" data-rate-index="' + index + '">';
+        var html = '<div class="rh-rate-item' + (index === 0 ? ' best-price' : '') + '">';
         
-        // Header
-        html += '<div class="rh-rate-header">';
-        html += '<h4 class="rh-room-name">' + escapeHtml(rate.room_name) + '</h4>';
-        if (rate.meal && rate.meal !== 'nomeal') {
-            html += '<span class="rh-meal-badge">' + getMealLabel(rate.meal) + '</span>';
+        // Badge برای بهترین قیمت
+        if (index === 0) {
+            html += '<span class="rh-best-badge">🏆 Best Price</span>';
         }
+        
+        // Meal
+        if (rate.meal && rate.meal !== 'nomeal') {
+            html += '<div class="rh-meal">' + getMealLabel(rate.meal) + '</div>';
+        }
+        
+        // Price
+        html += '<div class="rh-price-box">';
+        html += '<div class="rh-price-main">' + priceDisplay + '</div>';
+        html += '<div class="rh-price-detail">';
+        html += formatPrice(pricePerNight, rate.currency) + ' × ' + rate.nights + ' night' + (rate.nights > 1 ? 's' : '');
+        html += '</div>';
         html += '</div>';
         
         // Features
         if (rate.room_features && rate.room_features.length > 0) {
-            html += '<ul class="rh-rate-features">';
-            rate.room_features.slice(0, 3).forEach(function(feature) {
-                html += '<li><i class="fa fa-check"></i> ' + escapeHtml(feature) + '</li>';
+            html += '<div class="rh-features">';
+            rate.room_features.forEach(function(feature) {
+                html += '<span class="rh-feature">• ' + escapeHtml(feature) + '</span>';
             });
-            html += '</ul>';
+            html += '</div>';
         }
         
-        // Price
-        html += '<div class="rh-rate-price">';
-        html += '<div class="rh-price-main">' + priceDisplay + '</div>';
-        html += '<div class="rh-price-detail">' + 
-                formatPrice(pricePerNight, rate.currency) + 
-                ' per night × ' + nights + ' night' + (nights > 1 ? 's' : '') + 
-                '</div>';
-        html += '</div>';
-        
         // Cancellation
-        if (rate.cancellation_info) {
-            html += '<div class="rh-cancellation">';
-            if (rate.cancellation_info.free_cancellation_before) {
-                html += '<i class="fa fa-shield-alt"></i> Free cancellation until ' + 
-                        formatDate(rate.cancellation_info.free_cancellation_before);
-            } else {
-                html += '<i class="fa fa-ban"></i> Non-refundable';
-            }
+        if (rate.cancellation_info && rate.cancellation_info.free_cancellation_before) {
+            html += '<div class="rh-cancellation free">';
+            html += '<i class="fa fa-shield-alt"></i> Free cancellation';
+            html += '</div>';
+        } else {
+            html += '<div class="rh-cancellation non-refundable">';
+            html += '<i class="fa fa-ban"></i> Non-refundable';
             html += '</div>';
         }
         
         // Book Button
-        html += '<button class="rh-book-button" ' +
-                'data-book-hash="' + escapeHtml(rate.book_hash) + '" ' +
-                'data-price="' + rate.price + '" ' +
-                'data-currency="' + rate.currency + '">';
+        html += '<button class="rh-book-button" ';
+        html += 'data-book-hash="' + escapeHtml(rate.book_hash) + '" ';
+        html += 'data-price="' + rate.price + '" ';
+        html += 'data-currency="' + rate.currency + '">';
         html += '<span class="rh-btn-icon">🛎️</span> Book Now';
         html += '</button>';
         
@@ -206,26 +233,30 @@
      * نمایش خطا
      */
     function showError(message) {
-        var html = '<div class="rh-rates-error">' +
-                   '<i class="fa fa-exclamation-triangle"></i> ' +
-                   escapeHtml(message) +
-                   '</div>';
+        console.error('❌ Error:', message);
         
-        $('#rh-rates-container').html(html);
+        // نمایش toast
+        var toast = $('<div class="rh-error-toast">')
+            .html('<i class="fa fa-exclamation-circle"></i> ' + escapeHtml(message));
+        
+        $('body').append(toast);
+        
+        setTimeout(function() {
+            toast.addClass('show');
+        }, 10);
+        
+        setTimeout(function() {
+            toast.removeClass('show');
+            setTimeout(function() {
+                toast.remove();
+            }, 300);
+        }, 5000);
     }
     
     /**
-     * فرمت کردن قیمت
+     * فرمت قیمت
      */
     function formatPrice(amount, currency) {
-        var symbol = getCurrencySymbol(currency);
-        return symbol + parseFloat(amount).toFixed(2);
-    }
-    
-    /**
-     * دریافت سیمبل ارز
-     */
-    function getCurrencySymbol(currency) {
         var symbols = {
             'USD': '$',
             'EUR': '€',
@@ -234,7 +265,9 @@
             'CAD': 'C$',
             'AUD': 'A$'
         };
-        return symbols[currency] || currency + ' ';
+        
+        var symbol = symbols[currency] || currency + ' ';
+        return symbol + parseFloat(amount).toFixed(2);
     }
     
     /**
@@ -249,24 +282,6 @@
             'all_inclusive': '⭐ All Inclusive'
         };
         return labels[meal] || meal;
-    }
-    
-    /**
-     * فرمت تاریخ
-     */
-    function formatDate(dateString) {
-        try {
-            var date = new Date(dateString);
-            return date.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        } catch(e) {
-            return dateString;
-        }
     }
     
     /**
