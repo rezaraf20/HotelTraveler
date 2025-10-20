@@ -299,14 +299,26 @@ class RH_Location_Manager {
         return false;
     }
     
-    // ✅ در Traveler باید STRING با کاما باشه، نه array!
+    // پیدا کردن parent (کشور)
+    $location_post = get_post($location_id);
+    $country_id = $location_post->post_parent;
+    
+    // ✅ فرمت Traveler: _COUNTRY_,_CITY_
+    if ($country_id > 0) {
+        $formatted_location = '_' . $country_id . '_,_' . $location_id . '_';
+    } else {
+        $formatted_location = '_' . $location_id . '_';
+    }
+    
     update_post_meta($hotel_post_id, 'id_location', $location_id);
     update_post_meta($hotel_post_id, 'location_id', $location_id);
-    update_post_meta($hotel_post_id, 'multi_location', (string)$location_id); // ✅ تبدیل به string
+    update_post_meta($hotel_post_id, 'multi_location', $formatted_location);
     
     rh_log('Hotel linked to location', [
         'hotel_post_id' => $hotel_post_id,
-        'location_id' => $location_id
+        'location_id' => $location_id,
+        'country_id' => $country_id,
+        'formatted' => $formatted_location
     ], 'info');
     
     return true;
