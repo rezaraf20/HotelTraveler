@@ -295,22 +295,22 @@ class RH_Location_Manager {
      * لینک کردن هتل به location
      */
     public function link_hotel_to_location($hotel_post_id, $location_id) {
-        if (!$hotel_post_id || !$location_id) {
-            return false;
-        }
-        
-        // در Traveler معمولاً از این meta key استفاده می‌شه
-        update_post_meta($hotel_post_id, 'id_location', $location_id);
-        update_post_meta($hotel_post_id, 'location_id', $location_id);
-        update_post_meta($hotel_post_id, 'multi_location', [$location_id]); // آرایه برای multi-location
-        
-        rh_log('Hotel linked to location', [
-            'hotel_post_id' => $hotel_post_id,
-            'location_id' => $location_id
-        ], 'info');
-        
-        return true;
+    if (!$hotel_post_id || !$location_id) {
+        return false;
     }
+    
+    // ✅ در Traveler باید STRING با کاما باشه، نه array!
+    update_post_meta($hotel_post_id, 'id_location', $location_id);
+    update_post_meta($hotel_post_id, 'location_id', $location_id);
+    update_post_meta($hotel_post_id, 'multi_location', (string)$location_id); // ✅ تبدیل به string
+    
+    rh_log('Hotel linked to location', [
+        'hotel_post_id' => $hotel_post_id,
+        'location_id' => $location_id
+    ], 'info');
+    
+    return true;
+}
     
     /**
      * Clear کردن cache
