@@ -969,6 +969,9 @@ class RH_Hotel_Sync {
     }
     
     private function update_hotel($post_id, $hotel_info, $hotel_hid) {
+        // ✅ FIX: پاک کردن multi_location قدیمی که ممکنه array باشه
+        delete_post_meta($post_id, 'multi_location');
+        
         $description = $this->format_description($hotel_info);
         
         wp_update_post([
