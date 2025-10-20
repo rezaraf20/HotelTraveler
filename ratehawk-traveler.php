@@ -102,10 +102,11 @@ final class Ratehawk_Traveler {
         require_once RH_PLUGIN_DIR . 'includes/class-rh-install.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-cache.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-api.php';
+        require_once RH_PLUGIN_DIR . 'includes/class-rh-location-manager.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-hotel-sync.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-traveler-form-integration.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-prebook.php';
-        require_once RH_PLUGIN_DIR . 'includes/class-rh-location-manager.php';
+        
 
         
         // 🔥 NEW: Load Rates Class for Frontend
