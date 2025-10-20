@@ -324,6 +324,17 @@ class RH_Location_Manager {
         update_post_meta($hotel_post_id, 'location_id', $location_id);
         update_post_meta($hotel_post_id, 'multi_location', $formatted_location);
         
+        // ✅ Trigger WordPress action برای Traveler
+        do_action('st_update_location_post', $hotel_post_id, $location_id);
+        
+        // ✅ Clear cache های Traveler
+        if (function_exists('st_clear_location_cache')) {
+            st_clear_location_cache($hotel_post_id);
+        }
+        
+        // ✅ Force refresh relationship table
+        $this->update_location_relationships($hotel_post_id, $formatted_location);
+        
         rh_log('Hotel linked to location', [
             'hotel_post_id' => $hotel_post_id,
             'location_id' => $location_id,
@@ -332,6 +343,46 @@ class RH_Location_Manager {
         ], 'info');
         
         return true;
+    }
+    
+    /**
+     * آپدیت کردن جدول relationships برای Traveler
+     */
+    private function update_location_relationships($post_id, $formatted_location) {
+        global $wpdb;
+        
+        // پاک کردن relationship های قدیمی
+        $table_name = $wpdb->prefix . 'st_location_relationships';
+        
+        // چک کردن وجود جدول
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") !== $table_name) {
+            rh_log('Location relationships table does not exist', [], 'info');
+            return;
+        }
+        
+        // پاک کردن رکوردهای قدیمی
+        $wpdb->delete($table_name, [
+            'post_id' => $post_id
+        ]);
+        
+        // استخراج location IDs از فرمت _15857_,_15858_
+        preg_match_all('/_(\d+)_/', $formatted_location, $matches);
+        
+        if (!empty($matches[1])) {
+            foreach ($matches[1] as $location_id) {
+                $wpdb->insert($table_name, [
+                    'post_id' => $post_id,
+                    'location_id' => intval($location_id),
+                    'location_from' => 0,
+                    'location_to' => 0
+                ]);
+                
+                rh_log('Location relationship inserted', [
+                    'post_id' => $post_id,
+                    'location_id' => $location_id
+                ], 'debug');
+            }
+        }
     }
     
     /**
