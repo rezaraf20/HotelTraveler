@@ -1033,4 +1033,5 @@ class RH_Hotel_Sync {
             wp_send_json_error($e->getMessage());
         }
     }
+
 }
