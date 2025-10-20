@@ -1,6 +1,6 @@
 <?php
 /**
- * Hotel Sync Class (Complete Fixed Version)
+ * Hotel Sync Class (With Location Integration)
  * File: includes/class-rh-hotel-sync.php
  */
 
@@ -74,6 +74,10 @@ class RH_Hotel_Sync {
         
         $this->save_hotel_meta($post_id, $hotel_info);
         $this->save_hotel_taxonomies($post_id, $hotel_info);
+        
+        // ✅ اضافه کردن Location (کشور و شهر)
+        $this->link_hotel_to_location($post_id, $hotel_info);
+        
         $this->attach_hotel_images($post_id, $hotel_info);
         $this->sync_hotel_rooms($post_id, $hotel_info);
         $this->save_hotel_mapping($post_id, $hotel_id, $hotel_hid);
@@ -100,6 +104,52 @@ class RH_Hotel_Sync {
             'hotel_hid' => $hotel_hid,
             'permalink' => get_permalink($post_id)
         ];
+    }
+    
+    /**
+     * 🆕 لینک کردن هتل به Location (کشور و شهر)
+     */
+    private function link_hotel_to_location($hotel_post_id, $hotel_info) {
+        // بررسی وجود region data
+        if (empty($hotel_info['region'])) {
+            rh_log('No region data for hotel', [
+                'hotel_post_id' => $hotel_post_id
+            ], 'warning');
+            return false;
+        }
+        
+        $region_data = $hotel_info['region'];
+        
+        rh_log('Linking hotel to location', [
+            'hotel_post_id' => $hotel_post_id,
+            'region_data' => $region_data
+        ], 'info');
+        
+        // استفاده از Location Manager برای ساخت/پیدا کردن Location
+        if (function_exists('rh_location_manager')) {
+            $location_id = rh_location_manager()->get_or_create_location($region_data);
+            
+            if ($location_id) {
+                // لینک کردن هتل به Location
+                rh_location_manager()->link_hotel_to_location($hotel_post_id, $location_id);
+                
+                rh_log('Hotel linked to location successfully', [
+                    'hotel_post_id' => $hotel_post_id,
+                    'location_id' => $location_id
+                ], 'info');
+                
+                return $location_id;
+            } else {
+                rh_log('Failed to create/find location', [
+                    'hotel_post_id' => $hotel_post_id,
+                    'region_data' => $region_data
+                ], 'error');
+            }
+        } else {
+            rh_log('Location Manager not found', [], 'warning');
+        }
+        
+        return false;
     }
     
     private function fetch_hotel_data($hotel_id) {
@@ -741,7 +791,7 @@ class RH_Hotel_Sync {
         $allow_full_day = get_post_meta($room_post_id, 'allow_full_day', true) ?: 'on';
         $hotel_id = get_post_meta($room_post_id, 'room_hotel', true) ?: 0;
         
-        // Prepare bulk insert with CORRECT field names for Traveler
+        // Prepare bulk insert
         $values = [];
         $start_date = strtotime('today');
         $end_date = strtotime('+365 days', $start_date);
@@ -750,26 +800,25 @@ class RH_Hotel_Sync {
             $check_in = $timestamp;
             $check_out = $timestamp + 86400;
             
-            // Match EXACT structure of wp_st_room_availability table
             $values[] = $wpdb->prepare(
                 "(%d, %d, %d, %d, %s, %d, %s, NULL, %d, %d, %s, %d, %d, %d, %d, %d, %d, %d)",
-                $room_post_id,          // post_id
-                $check_in,              // check_in
-                $check_out,             // check_out
-                $number_room,           // number
-                'hotel_room',           // post_type
-                0,                      // price
-                'available',            // status
-                0,                      // number_booked
-                $hotel_id,              // parent_id
-                $allow_full_day,        // allow_full_day
-                $number_room,           // number_end
-                1,                      // booking_period
-                1,                      // is_base
-                $adult_number,          // adult_number
-                $children_number,       // child_number
-                0,                      // adult_price
-                0                       // child_price
+                $room_post_id,
+                $check_in,
+                $check_out,
+                $number_room,
+                'hotel_room',
+                0,
+                'available',
+                0,
+                $hotel_id,
+                $allow_full_day,
+                $number_room,
+                1,
+                1,
+                $adult_number,
+                $children_number,
+                0,
+                0
             );
         }
         
@@ -961,6 +1010,10 @@ class RH_Hotel_Sync {
         
         $this->save_hotel_meta($post_id, $hotel_info);
         $this->save_hotel_taxonomies($post_id, $hotel_info);
+        
+        // ✅ به‌روزرسانی Location در هنگام آپدیت هتل
+        $this->link_hotel_to_location($post_id, $hotel_info);
+        
         $this->sync_hotel_rooms($post_id, $hotel_info);
         $this->save_hotel_mapping($post_id, $hotel_info['id'], $hotel_hid);
         
@@ -1033,5 +1086,4 @@ class RH_Hotel_Sync {
             wp_send_json_error($e->getMessage());
         }
     }
-
 }
