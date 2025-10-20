@@ -1,6 +1,6 @@
 <?php
 /**
- * Hotel Sync Class (With Location Integration)
+ * Hotel Sync Class (With Location Integration - Fixed)
  * File: includes/class-rh-hotel-sync.php
  */
 
@@ -74,10 +74,6 @@ class RH_Hotel_Sync {
         
         $this->save_hotel_meta($post_id, $hotel_info);
         $this->save_hotel_taxonomies($post_id, $hotel_info);
-        
-        // ✅ اضافه کردن Location (کشور و شهر)
-        $this->link_hotel_to_location($post_id, $hotel_info);
-        
         $this->attach_hotel_images($post_id, $hotel_info);
         $this->sync_hotel_rooms($post_id, $hotel_info);
         $this->save_hotel_mapping($post_id, $hotel_id, $hotel_hid);
@@ -104,52 +100,6 @@ class RH_Hotel_Sync {
             'hotel_hid' => $hotel_hid,
             'permalink' => get_permalink($post_id)
         ];
-    }
-    
-    /**
-     * 🆕 لینک کردن هتل به Location (کشور و شهر)
-     */
-    private function link_hotel_to_location($hotel_post_id, $hotel_info) {
-        // بررسی وجود region data
-        if (empty($hotel_info['region'])) {
-            rh_log('No region data for hotel', [
-                'hotel_post_id' => $hotel_post_id
-            ], 'warning');
-            return false;
-        }
-        
-        $region_data = $hotel_info['region'];
-        
-        rh_log('Linking hotel to location', [
-            'hotel_post_id' => $hotel_post_id,
-            'region_data' => $region_data
-        ], 'info');
-        
-        // استفاده از Location Manager برای ساخت/پیدا کردن Location
-        if (function_exists('rh_location_manager')) {
-            $location_id = rh_location_manager()->get_or_create_location($region_data);
-            
-            if ($location_id) {
-                // لینک کردن هتل به Location
-                rh_location_manager()->link_hotel_to_location($hotel_post_id, $location_id);
-                
-                rh_log('Hotel linked to location successfully', [
-                    'hotel_post_id' => $hotel_post_id,
-                    'location_id' => $location_id
-                ], 'info');
-                
-                return $location_id;
-            } else {
-                rh_log('Failed to create/find location', [
-                    'hotel_post_id' => $hotel_post_id,
-                    'region_data' => $region_data
-                ], 'error');
-            }
-        } else {
-            rh_log('Location Manager not found', [], 'warning');
-        }
-        
-        return false;
     }
     
     private function fetch_hotel_data($hotel_id) {
@@ -255,6 +205,15 @@ class RH_Hotel_Sync {
             update_post_meta($post_id, '_rh_region', wp_json_encode($hotel_info['region']));
             update_post_meta($post_id, '_rh_country', $hotel_info['region']['country_code'] ?? '');
             update_post_meta($post_id, '_rh_city', $hotel_info['region']['name'] ?? '');
+            
+            // ✅ ساخت/پیدا کردن location و لینک کردن هتل
+            if (function_exists('rh_location_manager')) {
+                $location_id = rh_location_manager()->get_or_create_location($hotel_info['region']);
+                
+                if ($location_id) {
+                    rh_location_manager()->link_hotel_to_location($post_id, $location_id);
+                }
+            }
         }
         
         if (!empty($hotel_info['policy_struct'])) {
@@ -779,19 +738,16 @@ class RH_Hotel_Sync {
             return;
         }
         
-        // Delete existing records
         $wpdb->delete($table_name, [
             'post_id' => $room_post_id
         ]);
         
-        // Get room data
         $number_room = get_post_meta($room_post_id, 'number_room', true) ?: 1;
         $adult_number = get_post_meta($room_post_id, 'adult_number', true) ?: 2;
         $children_number = get_post_meta($room_post_id, 'children_number', true) ?: 2;
         $allow_full_day = get_post_meta($room_post_id, 'allow_full_day', true) ?: 'on';
         $hotel_id = get_post_meta($room_post_id, 'room_hotel', true) ?: 0;
         
-        // Prepare bulk insert
         $values = [];
         $start_date = strtotime('today');
         $end_date = strtotime('+365 days', $start_date);
@@ -822,7 +778,6 @@ class RH_Hotel_Sync {
             );
         }
         
-        // Bulk insert in chunks of 100
         $chunks = array_chunk($values, 100);
         $inserted = 0;
         
@@ -1010,10 +965,6 @@ class RH_Hotel_Sync {
         
         $this->save_hotel_meta($post_id, $hotel_info);
         $this->save_hotel_taxonomies($post_id, $hotel_info);
-        
-        // ✅ به‌روزرسانی Location در هنگام آپدیت هتل
-        $this->link_hotel_to_location($post_id, $hotel_info);
-        
         $this->sync_hotel_rooms($post_id, $hotel_info);
         $this->save_hotel_mapping($post_id, $hotel_info['id'], $hotel_hid);
         
