@@ -293,36 +293,46 @@ class RH_Location_Manager {
     
     /**
      * لینک کردن هتل به location
+     * ✅ با فرمت صحیح Traveler: _ID_,_ID_
      */
     public function link_hotel_to_location($hotel_post_id, $location_id) {
-    if (!$hotel_post_id || !$location_id) {
-        return false;
+        if (!$hotel_post_id || !$location_id) {
+            return false;
+        }
+        
+        // پیدا کردن parent (کشور)
+        $location_post = get_post($location_id);
+        
+        if (!$location_post) {
+            rh_log('Location post not found', ['location_id' => $location_id], 'error');
+            return false;
+        }
+        
+        $country_id = $location_post->post_parent;
+        
+        // ✅ فرمت Traveler: _COUNTRY_,_CITY_ با underscore و کاما
+        if ($country_id > 0) {
+            // هم کشور و هم شهر
+            $formatted_location = '_' . $country_id . '_,_' . $location_id . '_';
+        } else {
+            // فقط شهر (اگه parent نداشت)
+            $formatted_location = '_' . $location_id . '_';
+        }
+        
+        // ذخیره با سه meta key که Traveler استفاده می‌کنه
+        update_post_meta($hotel_post_id, 'id_location', $location_id);
+        update_post_meta($hotel_post_id, 'location_id', $location_id);
+        update_post_meta($hotel_post_id, 'multi_location', $formatted_location);
+        
+        rh_log('Hotel linked to location', [
+            'hotel_post_id' => $hotel_post_id,
+            'location_id' => $location_id,
+            'country_id' => $country_id,
+            'formatted' => $formatted_location
+        ], 'info');
+        
+        return true;
     }
-    
-    // پیدا کردن parent (کشور)
-    $location_post = get_post($location_id);
-    $country_id = $location_post->post_parent;
-    
-    // ✅ فرمت Traveler: _COUNTRY_,_CITY_
-    if ($country_id > 0) {
-        $formatted_location = '_' . $country_id . '_,_' . $location_id . '_';
-    } else {
-        $formatted_location = '_' . $location_id . '_';
-    }
-    
-    update_post_meta($hotel_post_id, 'id_location', $location_id);
-    update_post_meta($hotel_post_id, 'location_id', $location_id);
-    update_post_meta($hotel_post_id, 'multi_location', $formatted_location);
-    
-    rh_log('Hotel linked to location', [
-        'hotel_post_id' => $hotel_post_id,
-        'location_id' => $location_id,
-        'country_id' => $country_id,
-        'formatted' => $formatted_location
-    ], 'info');
-    
-    return true;
-}
     
     /**
      * Clear کردن cache
