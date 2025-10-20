@@ -207,12 +207,26 @@ class RH_Hotel_Sync {
             update_post_meta($post_id, '_rh_city', $hotel_info['region']['name'] ?? '');
             
             // ✅ ساخت/پیدا کردن location و لینک کردن هتل
-            if (function_exists('rh_location_manager')) {
-                $location_id = rh_location_manager()->get_or_create_location($hotel_info['region']);
-                
-                if ($location_id) {
-                    rh_location_manager()->link_hotel_to_location($post_id, $location_id);
+            try {
+                if (function_exists('rh_location_manager')) {
+                    $location_id = rh_location_manager()->get_or_create_location($hotel_info['region']);
+                    
+                    if ($location_id) {
+                        rh_location_manager()->link_hotel_to_location($post_id, $location_id);
+                        rh_log('Hotel linked to location', [
+                            'hotel_id' => $post_id,
+                            'location_id' => $location_id
+                        ], 'info');
+                    }
+                } else {
+                    rh_log('Location Manager function not found', [], 'warning');
                 }
+            } catch (Exception $e) {
+                rh_log('Location linking failed', [
+                    'error' => $e->getMessage(),
+                    'hotel_id' => $post_id
+                ], 'error');
+                // ادامه sync بدون location
             }
         }
         
