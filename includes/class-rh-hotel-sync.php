@@ -207,16 +207,29 @@ class RH_Hotel_Sync {
             update_post_meta($post_id, '_rh_city', $hotel_info['region']['name'] ?? '');
             
             // ✅ ساخت/پیدا کردن location و لینک کردن هتل
+            rh_log('Attempting to link hotel to location', [
+                'hotel_id' => $post_id,
+                'region_data' => $hotel_info['region']
+            ], 'debug');
+            
             try {
                 if (function_exists('rh_location_manager')) {
+                    rh_log('Location Manager function exists', [], 'debug');
+                    
                     $location_id = rh_location_manager()->get_or_create_location($hotel_info['region']);
+                    
+                    rh_log('Location ID returned', [
+                        'location_id' => $location_id
+                    ], 'debug');
                     
                     if ($location_id) {
                         rh_location_manager()->link_hotel_to_location($post_id, $location_id);
-                        rh_log('Hotel linked to location', [
+                        rh_log('Hotel linked to location successfully', [
                             'hotel_id' => $post_id,
                             'location_id' => $location_id
                         ], 'info');
+                    } else {
+                        rh_log('Location ID is empty or false', [], 'error');
                     }
                 } else {
                     rh_log('Location Manager function not found', [], 'warning');
@@ -228,6 +241,8 @@ class RH_Hotel_Sync {
                 ], 'error');
                 // ادامه sync بدون location
             }
+        } else {
+            rh_log('No region data in hotel info', ['hotel_id' => $post_id], 'warning');
         }
         
         if (!empty($hotel_info['policy_struct'])) {
@@ -255,7 +270,10 @@ class RH_Hotel_Sync {
         update_post_meta($post_id, '_rh_full_data', wp_json_encode($hotel_info));
         update_post_meta($post_id, '_rh_last_sync', current_time('mysql'));
         
-        update_post_meta($post_id, 'multi_location', 'off');
+        // ❌ حذف این خط چون Location Manager خودش multi_location رو ست می‌کنه
+        // update_post_meta($post_id, 'multi_location', 'off');
+        
+        update_post_meta($post_id, 'is_instant_booking', 'off');
         update_post_meta($post_id, 'is_instant_booking', 'off');
         update_post_meta($post_id, 'booking_period', 1);
         update_post_meta($post_id, 'hotel_booking_period', 1);
@@ -270,6 +288,13 @@ class RH_Hotel_Sync {
         update_post_meta($post_id, 'hotel_star', $star_rating);
         update_post_meta($post_id, 'video', '');
         update_post_meta($post_id, '_is_ratehawk_hotel', 1);
+        
+        // ✅ Meta های ضروری برای Traveler Archive
+        update_post_meta($post_id, 'is_featured', 'off');
+        update_post_meta($post_id, 'is_auto_caculate', 'on');
+        update_post_meta($post_id, 'hotel_layout_style', '1');
+        update_post_meta($post_id, 'map_zoom', '14');
+        update_post_meta($post_id, 'map_type', 'roadmap');
     }
     
     private function format_policies($policy_struct) {
@@ -985,6 +1010,9 @@ class RH_Hotel_Sync {
         $this->sync_hotel_rooms($post_id, $hotel_info);
         $this->save_hotel_mapping($post_id, $hotel_info['id'], $hotel_hid);
         
+        // ✅ Trigger Traveler indexing
+        $this->trigger_traveler_index($post_id);
+        
         rh_log('Hotel updated', ['post_id' => $post_id], 'info');
         
         return [
@@ -1053,5 +1081,27 @@ class RH_Hotel_Sync {
         } catch (Exception $e) {
             wp_send_json_error($e->getMessage());
         }
+    }
+    
+    /**
+     * Trigger Traveler indexing & cache clear
+     */
+    private function trigger_traveler_index($post_id) {
+        // Clear all Traveler caches
+        delete_transient('st_hotel_location_cache_' . $post_id);
+        delete_transient('st_location_search_cache');
+        wp_cache_delete($post_id, 'posts');
+        wp_cache_delete($post_id, 'post_meta');
+        
+        // Trigger Traveler actions
+        do_action('st_after_save_hotel', $post_id);
+        do_action('save_post_st_hotel', $post_id, get_post($post_id), true);
+        
+        // Update search index if function exists
+        if (function_exists('st_update_hotel_search_index')) {
+            st_update_hotel_search_index($post_id);
+        }
+        
+        rh_log('Traveler index triggered', ['post_id' => $post_id], 'debug');
     }
 }
