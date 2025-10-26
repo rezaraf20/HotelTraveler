@@ -324,15 +324,7 @@ class RH_Location_Manager {
         update_post_meta($hotel_post_id, 'location_id', $location_id);
         update_post_meta($hotel_post_id, 'multi_location', $formatted_location);
         
-        // ✅ Trigger WordPress action برای Traveler
-        do_action('st_update_location_post', $hotel_post_id, $location_id);
-        
-        // ✅ Clear cache های Traveler
-        if (function_exists('st_clear_location_cache')) {
-            st_clear_location_cache($hotel_post_id);
-        }
-        
-        // ✅ Force refresh relationship table
+        // ✅ آپدیت جدول relationships (اگه وجود داشت)
         $this->update_location_relationships($hotel_post_id, $formatted_location);
         
         rh_log('Hotel linked to location', [
@@ -347,42 +339,76 @@ class RH_Location_Manager {
     
     /**
      * آپدیت کردن جدول relationships برای Traveler
+     * این جدول برای جستجوی سریع location ها استفاده میشه
      */
     private function update_location_relationships($post_id, $formatted_location) {
         global $wpdb;
         
-        // پاک کردن relationship های قدیمی
         $table_name = $wpdb->prefix . 'st_location_relationships';
         
         // چک کردن وجود جدول
-        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") !== $table_name) {
-            rh_log('Location relationships table does not exist', [], 'info');
-            return;
+        $table_exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM information_schema.tables 
+             WHERE table_schema = %s 
+             AND table_name = %s",
+            DB_NAME,
+            $table_name
+        ));
+        
+        if (!$table_exists) {
+            rh_log('Location relationships table does not exist, skipping', [
+                'table' => $table_name
+            ], 'info');
+            return false;
         }
         
-        // پاک کردن رکوردهای قدیمی
+        // پاک کردن رکوردهای قدیمی این پست
         $wpdb->delete($table_name, [
             'post_id' => $post_id
-        ]);
+        ], ['%d']);
         
         // استخراج location IDs از فرمت _15857_,_15858_
         preg_match_all('/_(\d+)_/', $formatted_location, $matches);
         
-        if (!empty($matches[1])) {
-            foreach ($matches[1] as $location_id) {
-                $wpdb->insert($table_name, [
+        if (empty($matches[1])) {
+            rh_log('No location IDs found in formatted string', [
+                'formatted_location' => $formatted_location
+            ], 'warning');
+            return false;
+        }
+        
+        // Insert کردن رکوردهای جدید
+        $inserted = 0;
+        foreach ($matches[1] as $location_id) {
+            $result = $wpdb->insert(
+                $table_name,
+                [
                     'post_id' => $post_id,
                     'location_id' => intval($location_id),
                     'location_from' => 0,
                     'location_to' => 0
-                ]);
-                
-                rh_log('Location relationship inserted', [
+                ],
+                ['%d', '%d', '%d', '%d']
+            );
+            
+            if ($result) {
+                $inserted++;
+            } else {
+                rh_log('Failed to insert location relationship', [
                     'post_id' => $post_id,
-                    'location_id' => $location_id
-                ], 'debug');
+                    'location_id' => $location_id,
+                    'error' => $wpdb->last_error
+                ], 'warning');
             }
         }
+        
+        rh_log('Location relationships updated', [
+            'post_id' => $post_id,
+            'inserted' => $inserted,
+            'total_locations' => count($matches[1])
+        ], 'info');
+        
+        return $inserted > 0;
     }
     
     /**
