@@ -112,6 +112,7 @@ final class Ratehawk_Traveler {
         // 🔥 NEW: Load Rates Class for Frontend
         if (!is_admin()) {
             require_once RH_PLUGIN_DIR . 'includes/class-rh-hotel-rates.php';
+            require_once RH_PLUGIN_DIR . 'includes/class-rh-search.php';
         }
         
         // Admin
