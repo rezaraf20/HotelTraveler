@@ -415,23 +415,35 @@ class RH_Hotel_Sync {
         update_post_meta($post_id, 'map_type', 'roadmap');
     }
     
+    /**
+     * ✅ فرمت Policy برای Traveler (Array با title و policy_description)
+     */
     private function format_policies($policy_struct) {
-        $text = '';
+        $policies_array = [];
         
         foreach ($policy_struct as $policy) {
-            if (!empty($policy['title'])) {
-                $text .= strtoupper($policy['title']) . "\n\n";
+            if (empty($policy['title'])) {
+                continue;
             }
             
-            if (!empty($policy['paragraphs'])) {
-                foreach ($policy['paragraphs'] as $paragraph) {
-                    $text .= '• ' . $paragraph . "\n";
+            $title = sanitize_text_field($policy['title']);
+            $paragraphs = $policy['paragraphs'] ?? [];
+            
+            // ساخت description از paragraphs
+            $description = '';
+            if (!empty($paragraphs)) {
+                foreach ($paragraphs as $paragraph) {
+                    $description .= '• ' . $paragraph . "\n";
                 }
-                $text .= "\n";
             }
+            
+            $policies_array[] = [
+                'title' => $title,
+                'policy_description' => trim($description)
+            ];
         }
         
-        return $text;
+        return $policies_array; // ✅ Return array, نه string
     }
     
     /**
