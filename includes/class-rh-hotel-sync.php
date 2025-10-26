@@ -1,14 +1,15 @@
 <?php
 /**
- * Hotel Sync Class (With Location Integration - Fixed)
+ * Hotel Sync Class - COMPLETE VERSION با تمام فیلدهای API
  * File: includes/class-rh-hotel-sync.php
+ * 
+ * این کلاس همه فیلدهای API رو Parse و ذخیره می‌کنه
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-// Don't redeclare if already exists
 if (class_exists('RH_Hotel_Sync')) {
     return;
 }
@@ -177,7 +178,11 @@ class RH_Hotel_Sync {
         return $description;
     }
     
+    /**
+     * ✅ ذخیره تمام Meta های هتل (کامل شده)
+     */
     private function save_hotel_meta($post_id, $hotel_info) {
+        // === فیلدهای اصلی ===
         update_post_meta($post_id, '_ratehawk_hid', $hotel_info['hid'] ?? 0);
         update_post_meta($post_id, '_ratehawk_id', $hotel_info['id'] ?? '');
         update_post_meta($post_id, 'address', sanitize_text_field($hotel_info['address'] ?? ''));
@@ -186,7 +191,9 @@ class RH_Hotel_Sync {
         
         $star_rating = intval($hotel_info['star_rating'] ?? 0);
         update_post_meta($post_id, 'star_rate', $star_rating);
+        update_post_meta($post_id, 'hotel_star', $star_rating);
         
+        // === Check In/Out ===
         if (!empty($hotel_info['check_in_time'])) {
             update_post_meta($post_id, 'check_in_time', sanitize_text_field($hotel_info['check_in_time']));
         }
@@ -194,33 +201,86 @@ class RH_Hotel_Sync {
             update_post_meta($post_id, 'check_out_time', sanitize_text_field($hotel_info['check_out_time']));
         }
         
+        // === Contact Info ===
         if (!empty($hotel_info['phone'])) {
             update_post_meta($post_id, 'phone', sanitize_text_field($hotel_info['phone']));
         }
         if (!empty($hotel_info['email'])) {
-            update_post_meta($post_id, 'email', sanitize_email($hotel_info['email']));
+            $email = str_replace(['<', '>'], '', $hotel_info['email']);
+            update_post_meta($post_id, 'email', sanitize_email($email));
         }
         
+        // ✅ NEW: Postal Code
+        if (!empty($hotel_info['postal_code'])) {
+            update_post_meta($post_id, 'postal_code', sanitize_text_field($hotel_info['postal_code']));
+        }
+        
+        // ✅ NEW: Hotel Chain
+        if (!empty($hotel_info['hotel_chain'])) {
+            update_post_meta($post_id, '_rh_hotel_chain', sanitize_text_field($hotel_info['hotel_chain']));
+        }
+        
+        // ✅ NEW: Status Fields
+        update_post_meta($post_id, '_rh_is_closed', !empty($hotel_info['is_closed']) ? 1 : 0);
+        update_post_meta($post_id, '_rh_gender_required', !empty($hotel_info['is_gender_specification_required']) ? 1 : 0);
+        update_post_meta($post_id, '_rh_deleted', !empty($hotel_info['deleted']) ? 1 : 0);
+        
+        // ✅ NEW: Distance from Center
+        if (isset($hotel_info['distance_center'])) {
+            update_post_meta($post_id, '_rh_distance_center', floatval($hotel_info['distance_center']));
+        }
+        
+        // ✅ NEW: Front Desk Hours
+        if (!empty($hotel_info['front_desk_time_start'])) {
+            update_post_meta($post_id, '_rh_front_desk_start', sanitize_text_field($hotel_info['front_desk_time_start']));
+        }
+        if (!empty($hotel_info['front_desk_time_end'])) {
+            update_post_meta($post_id, '_rh_front_desk_end', sanitize_text_field($hotel_info['front_desk_time_end']));
+        }
+        
+        // ✅ NEW: SERP Filters
+        if (!empty($hotel_info['serp_filters'])) {
+            update_post_meta($post_id, '_rh_serp_filters', wp_json_encode($hotel_info['serp_filters']));
+        }
+        
+        // ✅ NEW: Star Certificate
+        if (!empty($hotel_info['star_certificate'])) {
+            update_post_meta($post_id, '_rh_star_certificate', wp_json_encode($hotel_info['star_certificate']));
+        }
+        
+        // ✅ NEW: Facts (کامل)
+        if (!empty($hotel_info['facts'])) {
+            update_post_meta($post_id, '_rh_facts', wp_json_encode($hotel_info['facts']));
+            
+            // ذخیره جداگانه برای دسترسی آسان
+            if (!empty($hotel_info['facts']['electricity'])) {
+                update_post_meta($post_id, '_rh_electricity', wp_json_encode($hotel_info['facts']['electricity']));
+            }
+            if (!empty($hotel_info['facts']['year_built'])) {
+                update_post_meta($post_id, '_rh_year_built', intval($hotel_info['facts']['year_built']));
+            }
+            if (!empty($hotel_info['facts']['year_renovated'])) {
+                update_post_meta($post_id, '_rh_year_renovated', intval($hotel_info['facts']['year_renovated']));
+            }
+            if (!empty($hotel_info['facts']['floors_number'])) {
+                update_post_meta($post_id, '_rh_floors', intval($hotel_info['facts']['floors_number']));
+            }
+            if (!empty($hotel_info['facts']['rooms_number'])) {
+                update_post_meta($post_id, '_rh_total_rooms', intval($hotel_info['facts']['rooms_number']));
+            }
+        }
+        
+        // === Region & Location ===
         if (!empty($hotel_info['region'])) {
             update_post_meta($post_id, '_rh_region', wp_json_encode($hotel_info['region']));
             update_post_meta($post_id, '_rh_country', $hotel_info['region']['country_code'] ?? '');
             update_post_meta($post_id, '_rh_city', $hotel_info['region']['name'] ?? '');
+            update_post_meta($post_id, '_rh_region_type', $hotel_info['region']['type'] ?? 'City');
             
-            // ✅ ساخت/پیدا کردن location و لینک کردن هتل
-            rh_log('Attempting to link hotel to location', [
-                'hotel_id' => $post_id,
-                'region_data' => $hotel_info['region']
-            ], 'debug');
-            
-            try {
-                if (function_exists('rh_location_manager')) {
-                    rh_log('Location Manager function exists', [], 'debug');
-                    
+            // ✅ Link به Location Manager
+            if (function_exists('rh_location_manager')) {
+                try {
                     $location_id = rh_location_manager()->get_or_create_location($hotel_info['region']);
-                    
-                    rh_log('Location ID returned', [
-                        'location_id' => $location_id
-                    ], 'debug');
                     
                     if ($location_id) {
                         rh_location_manager()->link_hotel_to_location($post_id, $location_id);
@@ -228,52 +288,109 @@ class RH_Hotel_Sync {
                             'hotel_id' => $post_id,
                             'location_id' => $location_id
                         ], 'info');
-                    } else {
-                        rh_log('Location ID is empty or false', [], 'error');
                     }
-                } else {
-                    rh_log('Location Manager function not found', [], 'warning');
+                } catch (Exception $e) {
+                    rh_log('Location linking failed', [
+                        'error' => $e->getMessage(),
+                        'hotel_id' => $post_id
+                    ], 'error');
                 }
-            } catch (Exception $e) {
-                rh_log('Location linking failed', [
-                    'error' => $e->getMessage(),
-                    'hotel_id' => $post_id
-                ], 'error');
-                // ادامه sync بدون location
             }
-        } else {
-            rh_log('No region data in hotel info', ['hotel_id' => $post_id], 'warning');
         }
         
+        // === Policy ===
         if (!empty($hotel_info['policy_struct'])) {
             update_post_meta($post_id, '_rh_policy_struct', wp_json_encode($hotel_info['policy_struct']));
             $policy_text = $this->format_policies($hotel_info['policy_struct']);
             update_post_meta($post_id, 'hotel_policy', $policy_text);
         }
         
+        // === Metapolicy (کامل) ===
         if (!empty($hotel_info['metapolicy_struct'])) {
+            // ذخیره کامل
             update_post_meta($post_id, '_rh_metapolicy', wp_json_encode($hotel_info['metapolicy_struct']));
+            
+            // ✅ ذخیره جداگانه هر بخش
+            $meta = $hotel_info['metapolicy_struct'];
+            
+            if (!empty($meta['children'])) {
+                update_post_meta($post_id, '_rh_children_policy', wp_json_encode($meta['children']));
+            }
+            if (!empty($meta['children_meal'])) {
+                update_post_meta($post_id, '_rh_children_meal', wp_json_encode($meta['children_meal']));
+            }
+            if (!empty($meta['cot'])) {
+                update_post_meta($post_id, '_rh_cot_policy', wp_json_encode($meta['cot']));
+            }
+            if (!empty($meta['deposit'])) {
+                update_post_meta($post_id, '_rh_deposit_policy', wp_json_encode($meta['deposit']));
+            }
+            if (!empty($meta['extra_bed'])) {
+                update_post_meta($post_id, '_rh_extra_bed', wp_json_encode($meta['extra_bed']));
+            }
+            if (!empty($meta['internet'])) {
+                update_post_meta($post_id, '_rh_internet_policy', wp_json_encode($meta['internet']));
+            }
+            if (!empty($meta['meal'])) {
+                update_post_meta($post_id, '_rh_meal_prices', wp_json_encode($meta['meal']));
+            }
+            if (!empty($meta['no_show'])) {
+                update_post_meta($post_id, '_rh_no_show_policy', wp_json_encode($meta['no_show']));
+            }
+            if (!empty($meta['parking'])) {
+                update_post_meta($post_id, '_rh_parking', wp_json_encode($meta['parking']));
+            }
+            if (!empty($meta['pets'])) {
+                update_post_meta($post_id, '_rh_pets_policy', wp_json_encode($meta['pets']));
+            }
+            if (!empty($meta['shuttle'])) {
+                update_post_meta($post_id, '_rh_shuttle', wp_json_encode($meta['shuttle']));
+            }
+            if (!empty($meta['visa'])) {
+                update_post_meta($post_id, '_rh_visa_support', wp_json_encode($meta['visa']));
+            }
+            if (!empty($meta['add_fee'])) {
+                update_post_meta($post_id, '_rh_additional_fees', wp_json_encode($meta['add_fee']));
+            }
+            if (!empty($meta['check_in_check_out'])) {
+                update_post_meta($post_id, '_rh_checkin_checkout_policy', wp_json_encode($meta['check_in_check_out']));
+            }
         }
         
         if (!empty($hotel_info['metapolicy_extra_info'])) {
             update_post_meta($post_id, '_rh_extra_info', sanitize_textarea_field($hotel_info['metapolicy_extra_info']));
         }
         
+        // === Payment Methods ===
         if (!empty($hotel_info['payment_methods'])) {
             update_post_meta($post_id, '_rh_payment_methods', wp_json_encode($hotel_info['payment_methods']));
         }
         
+        // === Keys Pickup (کامل) ===
         if (!empty($hotel_info['keys_pickup'])) {
             update_post_meta($post_id, '_rh_keys_pickup', wp_json_encode($hotel_info['keys_pickup']));
+            
+            // ✅ ذخیره جداگانه
+            $keys = $hotel_info['keys_pickup'];
+            if (!empty($keys['type'])) {
+                update_post_meta($post_id, '_rh_keys_type', sanitize_text_field($keys['type']));
+            }
+            if (!empty($keys['is_contactless'])) {
+                update_post_meta($post_id, '_rh_keys_contactless', 1);
+            }
+            if (!empty($keys['apartment_office_address'])) {
+                update_post_meta($post_id, '_rh_keys_office_address', sanitize_text_field($keys['apartment_office_address']));
+            }
+            if (!empty($keys['apartment_extra_information'])) {
+                update_post_meta($post_id, '_rh_keys_extra_info', sanitize_textarea_field($keys['apartment_extra_information']));
+            }
         }
         
+        // ✅ Full Data (برای backup)
         update_post_meta($post_id, '_rh_full_data', wp_json_encode($hotel_info));
         update_post_meta($post_id, '_rh_last_sync', current_time('mysql'));
         
-        // ❌ حذف این خط چون Location Manager خودش multi_location رو ست می‌کنه
-        // update_post_meta($post_id, 'multi_location', 'off');
-        
-        update_post_meta($post_id, 'is_instant_booking', 'off');
+        // === Traveler Required Fields ===
         update_post_meta($post_id, 'is_instant_booking', 'off');
         update_post_meta($post_id, 'booking_period', 1);
         update_post_meta($post_id, 'hotel_booking_period', 1);
@@ -285,12 +402,11 @@ class RH_Hotel_Sync {
         update_post_meta($post_id, 'allow_full_day', 'on');
         update_post_meta($post_id, 'deposit_payment_status', 'off');
         update_post_meta($post_id, 'cancel_booking_fee', 0);
-        update_post_meta($post_id, 'hotel_star', $star_rating);
         update_post_meta($post_id, 'video', '');
         update_post_meta($post_id, '_is_ratehawk_hotel', 1);
         
-        // ✅ Meta های ضروری برای Traveler Archive
-        update_post_meta($post_id, 'is_featured', 'on');  // ✅ باید on باشه!
+        // ✅ Archive & Search Required
+        update_post_meta($post_id, 'is_featured', 'on');
         update_post_meta($post_id, 'is_auto_caculate', 'on');
         update_post_meta($post_id, 'hotel_layout_style', '1');
         update_post_meta($post_id, 'map_zoom', '14');
@@ -316,9 +432,13 @@ class RH_Hotel_Sync {
         return $text;
     }
     
+    /**
+     * ✅ ذخیره Taxonomies (با non_free_amenities)
+     */
     private function save_hotel_taxonomies($post_id, $hotel_info) {
         if (!empty($hotel_info['amenity_groups'])) {
             $facility_ids = [];
+            $non_free_amenities = [];
             
             foreach ($hotel_info['amenity_groups'] as $group) {
                 if (empty($group['amenities'])) continue;
@@ -334,10 +454,19 @@ class RH_Hotel_Sync {
                         $facility_ids[] = intval($term['term_id']);
                     }
                 }
+                
+                // ✅ ذخیره امکانات پولی
+                if (!empty($group['non_free_amenities'])) {
+                    $non_free_amenities = array_merge($non_free_amenities, $group['non_free_amenities']);
+                }
             }
             
             if (!empty($facility_ids)) {
                 wp_set_object_terms($post_id, $facility_ids, 'hotel-facilities');
+            }
+            
+            if (!empty($non_free_amenities)) {
+                update_post_meta($post_id, '_rh_non_free_amenities', wp_json_encode($non_free_amenities));
             }
         }
         
@@ -354,8 +483,14 @@ class RH_Hotel_Sync {
         }
     }
     
+    /**
+     * ✅ دانلود تصاویر (با پشتیبانی از images_ext)
+     */
     private function attach_hotel_images($post_id, $hotel_info) {
-        if (empty($hotel_info['images'])) {
+        // ترجیح با images_ext (دارای category)
+        $images_source = !empty($hotel_info['images_ext']) ? $hotel_info['images_ext'] : $hotel_info['images'];
+        
+        if (empty($images_source)) {
             rh_log('No images found', ['post_id' => $post_id], 'warning');
             return;
         }
@@ -366,12 +501,19 @@ class RH_Hotel_Sync {
             require_once(ABSPATH . 'wp-admin/includes/image.php');
         }
         
-        $images = array_slice($hotel_info['images'], 0, 10);
+        $images = array_slice($images_source, 0, 10);
         $gallery_ids = [];
         $featured_set = false;
         
         foreach ($images as $index => $image_data) {
-            $image_url = is_string($image_data) ? $image_data : ($image_data['url'] ?? '');
+            // پشتیبانی از هر دو فرمت
+            if (is_array($image_data)) {
+                $image_url = $image_data['url'] ?? '';
+                $category = $image_data['category_slug'] ?? '';
+            } else {
+                $image_url = $image_data;
+                $category = '';
+            }
             
             if (empty($image_url)) {
                 continue;
@@ -387,6 +529,12 @@ class RH_Hotel_Sync {
                 if ($attachment_id && !is_wp_error($attachment_id)) {
                     $gallery_ids[] = $attachment_id;
                     
+                    // ✅ ذخیره category به عنوان alt text
+                    if (!empty($category)) {
+                        update_post_meta($attachment_id, '_wp_attachment_image_alt', $category);
+                        update_post_meta($attachment_id, '_rh_image_category', $category);
+                    }
+                    
                     if (!$featured_set) {
                         set_post_thumbnail($post_id, $attachment_id);
                         $featured_set = true;
@@ -394,7 +542,8 @@ class RH_Hotel_Sync {
                     
                     rh_log('Image downloaded', [
                         'post_id' => $post_id,
-                        'attachment_id' => $attachment_id
+                        'attachment_id' => $attachment_id,
+                        'category' => $category
                     ], 'info');
                 }
             } catch (Exception $e) {
@@ -527,6 +676,9 @@ class RH_Hotel_Sync {
         return $tmp_file;
     }
     
+    /**
+     * Sync اتاق‌ها
+     */
     private function sync_hotel_rooms($hotel_post_id, $hotel_info) {
         if (empty($hotel_info['room_groups'])) {
             rh_log('No room groups', ['hotel_post_id' => $hotel_post_id], 'info');
@@ -612,6 +764,9 @@ class RH_Hotel_Sync {
         return !empty($rooms) ? $rooms[0]->ID : null;
     }
     
+    /**
+     * ✅ ساخت اتاق (کامل با همه فیلدها)
+     */
     private function create_room($hotel_post_id, $room_group) {
         $language = rh_get_current_language();
         $room_name = sanitize_text_field($room_group['name'] ?? 'Unnamed Room');
@@ -679,11 +834,15 @@ class RH_Hotel_Sync {
         return $room_post_id;
     }
     
+    /**
+     * ✅ ذخیره Meta های اتاق (کامل با rg_ext)
+     */
     private function save_room_meta($room_post_id, $hotel_post_id, $room_group) {
         update_post_meta($room_post_id, 'room_parent', $hotel_post_id);
         update_post_meta($room_post_id, '_rh_room_group_id', $room_group['room_group_id']);
         update_post_meta($room_post_id, '_is_ratehawk_room', 1);
         
+        // === rg_ext (اطلاعات تکمیلی) ===
         $rg_ext = $room_group['rg_ext'] ?? [];
         $capacity = $rg_ext['capacity'] ?? 2;
         $bedrooms = $rg_ext['bedrooms'] ?? 0;
@@ -691,22 +850,41 @@ class RH_Hotel_Sync {
         update_post_meta($room_post_id, 'number_room', 1);
         update_post_meta($room_post_id, 'adult_number', $capacity > 0 ? $capacity : 2);
         update_post_meta($room_post_id, 'children_number', 2);
-        update_post_meta($room_post_id, 'child_number', 2);  // ✅ هم adult_number هم child_number
+        update_post_meta($room_post_id, 'child_number', 2);
         update_post_meta($room_post_id, 'bed_number', $bedrooms > 0 ? $bedrooms : 1);
         
+        // ✅ ذخیره همه فیلدهای rg_ext
+        if (!empty($rg_ext)) {
+            update_post_meta($room_post_id, '_rh_rg_ext', wp_json_encode($rg_ext));
+            
+            // ذخیره جداگانه
+            update_post_meta($room_post_id, '_rh_has_balcony', !empty($rg_ext['balcony']) ? 1 : 0);
+            update_post_meta($room_post_id, '_rh_bathroom_type', intval($rg_ext['bathroom'] ?? 0)); // 1=shared, 2=private
+            update_post_meta($room_post_id, '_rh_bedding_type', intval($rg_ext['bedding'] ?? 0));
+            update_post_meta($room_post_id, '_rh_is_club_room', !empty($rg_ext['club']) ? 1 : 0);
+            update_post_meta($room_post_id, '_rh_is_family_room', !empty($rg_ext['family']) ? 1 : 0);
+            update_post_meta($room_post_id, '_rh_floor_number', intval($rg_ext['floor'] ?? 0));
+            update_post_meta($room_post_id, '_rh_quality_level', intval($rg_ext['quality'] ?? 0));
+            update_post_meta($room_post_id, '_rh_room_class', intval($rg_ext['class'] ?? 0));
+            update_post_meta($room_post_id, '_rh_gender_specific', intval($rg_ext['sex'] ?? 0));
+            update_post_meta($room_post_id, '_rh_has_view', !empty($rg_ext['view']) ? 1 : 0);
+        }
+        
+        // === Size ===
         if (!empty($room_group['size'])) {
             update_post_meta($room_post_id, 'room_footage', floatval($room_group['size']));
         }
         
+        // === Traveler Required ===
         update_post_meta($room_post_id, 'booking_option', 'enquire');
         update_post_meta($room_post_id, 'price', 0);
         update_post_meta($room_post_id, '_rh_dynamic_pricing', 1);
         update_post_meta($room_post_id, 'is_sale', 'off');
         update_post_meta($room_post_id, 'discount_rate', 0);
         update_post_meta($room_post_id, 'allow_full_day', 'on');
-        update_post_meta($room_post_id, 'status', 'publish');  // ✅ اضافه کردن status
-        update_post_meta($room_post_id, 'adult_price', 0);  // ✅ قیمت بزرگسال
-        update_post_meta($room_post_id, 'child_price', 0);  // ✅ قیمت کودک
+        update_post_meta($room_post_id, 'status', 'publish');
+        update_post_meta($room_post_id, 'adult_price', 0);
+        update_post_meta($room_post_id, 'child_price', 0);
         update_post_meta($room_post_id, 'calendar_default_state', 'available');
         update_post_meta($room_post_id, 'default_state', 'available');
         update_post_meta($room_post_id, '_rh_room_full_data', wp_json_encode($room_group));
@@ -781,9 +959,7 @@ class RH_Hotel_Sync {
             return;
         }
         
-        $wpdb->delete($table_name, [
-            'post_id' => $room_post_id
-        ]);
+        $wpdb->delete($table_name, ['post_id' => $room_post_id]);
         
         $number_room = get_post_meta($room_post_id, 'number_room', true) ?: 1;
         $adult_number = get_post_meta($room_post_id, 'adult_number', true) ?: 2;
@@ -874,14 +1050,14 @@ class RH_Hotel_Sync {
         }
     }
     
+    /**
+     * ✅ دانلود تصاویر اتاق (با پشتیبانی images_ext)
+     */
     private function attach_room_images($room_post_id, $room_group) {
-        $images = $room_group['images_ext'] ?? [];
+        // ترجیح با images_ext
+        $images_source = !empty($room_group['images_ext']) ? $room_group['images_ext'] : $room_group['images'];
         
-        if (empty($images)) {
-            $images = $room_group['images'] ?? [];
-        }
-        
-        if (empty($images)) {
+        if (empty($images_source)) {
             rh_log('No room images found', [
                 'room_post_id' => $room_post_id,
                 'room_name' => $room_group['name'] ?? 'Unknown'
@@ -895,17 +1071,18 @@ class RH_Hotel_Sync {
             require_once(ABSPATH . 'wp-admin/includes/image.php');
         }
         
-        $images = array_slice($images, 0, 5);
+        $images = array_slice($images_source, 0, 5);
         $gallery_ids = [];
         $featured_set = false;
         
         foreach ($images as $index => $image_data) {
-            $image_url = '';
-            
-            if (is_string($image_data)) {
+            // پشتیبانی از هر دو فرمت
+            if (is_array($image_data)) {
+                $image_url = $image_data['url'] ?? '';
+                $category = $image_data['category_slug'] ?? '';
+            } else {
                 $image_url = $image_data;
-            } elseif (is_array($image_data) && isset($image_data['url'])) {
-                $image_url = $image_data['url'];
+                $category = '';
             }
             
             if (empty($image_url)) {
@@ -925,6 +1102,12 @@ class RH_Hotel_Sync {
                         if ($attachment_id && !is_wp_error($attachment_id)) {
                             $gallery_ids[] = $attachment_id;
                             
+                            // ✅ ذخیره category
+                            if (!empty($category)) {
+                                update_post_meta($attachment_id, '_wp_attachment_image_alt', $category);
+                                update_post_meta($attachment_id, '_rh_image_category', $category);
+                            }
+                            
                             if (!$featured_set) {
                                 set_post_thumbnail($room_post_id, $attachment_id);
                                 $featured_set = true;
@@ -943,6 +1126,11 @@ class RH_Hotel_Sync {
                     
                     if ($attachment_id && !is_wp_error($attachment_id)) {
                         $gallery_ids[] = $attachment_id;
+                        
+                        if (!empty($category)) {
+                            update_post_meta($attachment_id, '_wp_attachment_image_alt', $category);
+                            update_post_meta($attachment_id, '_rh_image_category', $category);
+                        }
                         
                         if (!$featured_set) {
                             set_post_thumbnail($room_post_id, $attachment_id);
@@ -996,24 +1184,22 @@ class RH_Hotel_Sync {
             'last_sync' => current_time('mysql')
         ]);
         
-        // ✅ آپدیت جدول st_hotel (جدول cache Traveler)
+        // ✅ آپدیت جدول st_hotel
         $this->update_st_hotel_table($post_id);
     }
     
     /**
-     * آپدیت جدول wp_st_hotel (جدول cache Traveler)
+     * ✅ آپدیت جدول wp_st_hotel (cache Traveler)
      */
     private function update_st_hotel_table($post_id) {
         global $wpdb;
         
         $table_name = $wpdb->prefix . 'st_hotel';
         
-        // چک کردن وجود جدول
         if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") !== $table_name) {
             return;
         }
         
-        // گرفتن اطلاعات
         $multi_location = get_post_meta($post_id, 'multi_location', true);
         $id_location = get_post_meta($post_id, 'id_location', true);
         $address = get_post_meta($post_id, 'address', true);
@@ -1024,7 +1210,6 @@ class RH_Hotel_Sync {
         $map_lng = get_post_meta($post_id, 'map_lng', true);
         $is_featured = get_post_meta($post_id, 'is_featured', true);
         
-        // پاک و insert
         $wpdb->delete($table_name, ['post_id' => $post_id]);
         
         $wpdb->insert($table_name, [
@@ -1049,7 +1234,7 @@ class RH_Hotel_Sync {
     }
     
     private function update_hotel($post_id, $hotel_info, $hotel_hid) {
-        // ✅ FIX: پاک کردن multi_location قدیمی که ممکنه array باشه
+        // پاک کردن multi_location قدیمی
         delete_post_meta($post_id, 'multi_location');
         
         $description = $this->format_description($hotel_info);
@@ -1077,6 +1262,28 @@ class RH_Hotel_Sync {
             'updated' => true,
             'permalink' => get_permalink($post_id)
         ];
+    }
+    
+    /**
+     * ✅ Trigger Traveler indexing & cache clear
+     */
+    private function trigger_traveler_index($post_id) {
+        // Clear all Traveler caches
+        delete_transient('st_hotel_location_cache_' . $post_id);
+        delete_transient('st_location_search_cache');
+        wp_cache_delete($post_id, 'posts');
+        wp_cache_delete($post_id, 'post_meta');
+        
+        // Trigger Traveler actions
+        do_action('st_after_save_hotel', $post_id);
+        do_action('save_post_st_hotel', $post_id, get_post($post_id), true);
+        
+        // Update search index if function exists
+        if (function_exists('st_update_hotel_search_index')) {
+            st_update_hotel_search_index($post_id);
+        }
+        
+        rh_log('Traveler index triggered', ['post_id' => $post_id], 'debug');
     }
     
     private function cleanup_orphaned_mappings() {
@@ -1136,27 +1343,5 @@ class RH_Hotel_Sync {
         } catch (Exception $e) {
             wp_send_json_error($e->getMessage());
         }
-    }
-    
-    /**
-     * Trigger Traveler indexing & cache clear
-     */
-    private function trigger_traveler_index($post_id) {
-        // Clear all Traveler caches
-        delete_transient('st_hotel_location_cache_' . $post_id);
-        delete_transient('st_location_search_cache');
-        wp_cache_delete($post_id, 'posts');
-        wp_cache_delete($post_id, 'post_meta');
-        
-        // Trigger Traveler actions
-        do_action('st_after_save_hotel', $post_id);
-        do_action('save_post_st_hotel', $post_id, get_post($post_id), true);
-        
-        // Update search index if function exists
-        if (function_exists('st_update_hotel_search_index')) {
-            st_update_hotel_search_index($post_id);
-        }
-        
-        rh_log('Traveler index triggered', ['post_id' => $post_id], 'debug');
     }
 }
