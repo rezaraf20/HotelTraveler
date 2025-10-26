@@ -691,6 +691,7 @@ class RH_Hotel_Sync {
         update_post_meta($room_post_id, 'number_room', 1);
         update_post_meta($room_post_id, 'adult_number', $capacity > 0 ? $capacity : 2);
         update_post_meta($room_post_id, 'children_number', 2);
+        update_post_meta($room_post_id, 'child_number', 2);  // ✅ هم adult_number هم child_number
         update_post_meta($room_post_id, 'bed_number', $bedrooms > 0 ? $bedrooms : 1);
         
         if (!empty($room_group['size'])) {
@@ -703,6 +704,9 @@ class RH_Hotel_Sync {
         update_post_meta($room_post_id, 'is_sale', 'off');
         update_post_meta($room_post_id, 'discount_rate', 0);
         update_post_meta($room_post_id, 'allow_full_day', 'on');
+        update_post_meta($room_post_id, 'status', 'publish');  // ✅ اضافه کردن status
+        update_post_meta($room_post_id, 'adult_price', 0);  // ✅ قیمت بزرگسال
+        update_post_meta($room_post_id, 'child_price', 0);  // ✅ قیمت کودک
         update_post_meta($room_post_id, 'calendar_default_state', 'available');
         update_post_meta($room_post_id, 'default_state', 'available');
         update_post_meta($room_post_id, '_rh_room_full_data', wp_json_encode($room_group));
@@ -991,6 +995,57 @@ class RH_Hotel_Sync {
             'sync_status' => 'completed',
             'last_sync' => current_time('mysql')
         ]);
+        
+        // ✅ آپدیت جدول st_hotel (جدول cache Traveler)
+        $this->update_st_hotel_table($post_id);
+    }
+    
+    /**
+     * آپدیت جدول wp_st_hotel (جدول cache Traveler)
+     */
+    private function update_st_hotel_table($post_id) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'st_hotel';
+        
+        // چک کردن وجود جدول
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") !== $table_name) {
+            return;
+        }
+        
+        // گرفتن اطلاعات
+        $multi_location = get_post_meta($post_id, 'multi_location', true);
+        $id_location = get_post_meta($post_id, 'id_location', true);
+        $address = get_post_meta($post_id, 'address', true);
+        $allow_full_day = get_post_meta($post_id, 'allow_full_day', true);
+        $hotel_star = get_post_meta($post_id, 'hotel_star', true);
+        $hotel_booking_period = get_post_meta($post_id, 'hotel_booking_period', true);
+        $map_lat = get_post_meta($post_id, 'map_lat', true);
+        $map_lng = get_post_meta($post_id, 'map_lng', true);
+        $is_featured = get_post_meta($post_id, 'is_featured', true);
+        
+        // پاک و insert
+        $wpdb->delete($table_name, ['post_id' => $post_id]);
+        
+        $wpdb->insert($table_name, [
+            'post_id' => $post_id,
+            'multi_location' => $multi_location ?: '',
+            'id_location' => $id_location ?: 0,
+            'address' => $address ?: '',
+            'allow_full_day' => $allow_full_day ?: 'on',
+            'rate_review' => 0,
+            'hotel_star' => $hotel_star ?: 0,
+            'price_avg' => 0,
+            'min_price' => 0,
+            'hotel_booking_period' => $hotel_booking_period ?: 1,
+            'map_lat' => $map_lat ?: 0,
+            'map_lng' => $map_lng ?: 0,
+            'is_sale_schedule' => 'off',
+            'post_origin' => null,
+            'is_featured' => $is_featured ?: 'on'
+        ]);
+        
+        rh_log('st_hotel table updated', ['post_id' => $post_id], 'debug');
     }
     
     private function update_hotel($post_id, $hotel_info, $hotel_hid) {
