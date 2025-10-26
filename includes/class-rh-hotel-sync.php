@@ -301,8 +301,10 @@ class RH_Hotel_Sync {
         // === Policy ===
         if (!empty($hotel_info['policy_struct'])) {
             update_post_meta($post_id, '_rh_policy_struct', wp_json_encode($hotel_info['policy_struct']));
-            $policy_text = $this->format_policies($hotel_info['policy_struct']);
-            update_post_meta($post_id, 'hotel_policy', $policy_text);
+            
+            // ✅ فرمت Traveler: Array با title و policy_description
+            $policy_array = $this->format_policies($hotel_info['policy_struct']);
+            update_post_meta($post_id, 'hotel_policy', $policy_array);
         }
         
         // === Metapolicy (کامل) ===
