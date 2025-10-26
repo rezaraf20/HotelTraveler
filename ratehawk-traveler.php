@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
 /**
  * Constants
  */
-define('RH_VERSION', '1.0.1'); // <--- بروز شد
+define('RH_VERSION', '1.0.1');
 define('RH_PLUGIN_FILE', __FILE__);
 define('RH_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RH_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -107,11 +107,9 @@ final class Ratehawk_Traveler {
         require_once RH_PLUGIN_DIR . 'includes/class-rh-traveler-form-integration.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-prebook.php';
         
-
-        
-        // 🔥 NEW: Load Rates Class for Frontend
+        // Frontend
         if (!is_admin()) {
-            require_once RH_PLUGIN_DIR . 'includes/class-rh-hotel-rates.php';
+            require_once RH_PLUGIN_DIR . 'includes/class-rh-simple-rates.php';
             require_once RH_PLUGIN_DIR . 'includes/class-rh-search.php';
         }
         
@@ -128,6 +126,9 @@ final class Ratehawk_Traveler {
         add_action('plugins_loaded', [$this, 'init'], 0);
         add_action('init', [$this, 'load_textdomain']);
         
+        // 🔥 NEW: Enqueue frontend styles for metapolicy
+        add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
+        
         if (is_admin()) {
             add_action('admin_init', [$this, 'admin_init']);
         }
@@ -138,9 +139,10 @@ final class Ratehawk_Traveler {
         if (is_admin()) {
             RH_Admin::instance();
         } else {
-            // 🔥 NEW: Initialize Frontend Rates
+            // Initialize Frontend Rates
             if (rh_is_configured()) {
-                RH_Hotel_Rates::instance();
+                RH_Simple_Rates::instance();
+                RH_Search::instance();
             }
         }
         
@@ -181,6 +183,30 @@ final class Ratehawk_Traveler {
             'ratehawk-traveler',
             false,
             dirname(RH_PLUGIN_BASENAME) . '/languages'
+        );
+    }
+    
+    /**
+     * 🔥 NEW: Enqueue frontend assets for metapolicy display
+     */
+    public function enqueue_frontend_assets() {
+        // فقط در صفحه هتل
+        if (!is_singular('st_hotel')) {
+            return;
+        }
+        
+        // چک کنید که هتل Ratehawk است
+        global $post;
+        if (!$post || !get_post_meta($post->ID, '_is_ratehawk_hotel', true)) {
+            return;
+        }
+        
+        // Enqueue metapolicy styles
+        wp_enqueue_style(
+            'ratehawk-metapolicy',
+            RH_PLUGIN_URL . 'assets/css/metapolicy.css',
+            [],
+            RH_VERSION
         );
     }
     
