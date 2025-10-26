@@ -377,18 +377,19 @@ class RH_Location_Manager {
             return false;
         }
         
-        // Insert کردن رکوردهای جدید
+        // ✅ Insert کردن با ستون‌های صحیح: location_from (نه location_id!)
         $inserted = 0;
         foreach ($matches[1] as $location_id) {
             $result = $wpdb->insert(
                 $table_name,
                 [
                     'post_id' => $post_id,
-                    'location_id' => intval($location_id),
-                    'location_from' => 0,
-                    'location_to' => 0
+                    'location_from' => intval($location_id),  // ✅ location_from
+                    'location_to' => 0,
+                    'post_type' => 'st_hotel',
+                    'location_type' => ''
                 ],
-                ['%d', '%d', '%d', '%d']
+                ['%d', '%d', '%d', '%s', '%s']
             );
             
             if ($result) {
