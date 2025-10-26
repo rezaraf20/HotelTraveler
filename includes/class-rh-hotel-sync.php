@@ -357,10 +357,33 @@ class RH_Hotel_Sync {
             if (!empty($meta['check_in_check_out'])) {
                 update_post_meta($post_id, '_rh_checkin_checkout_policy', wp_json_encode($meta['check_in_check_out']));
             }
+            
+            // 🔥 NEW: Format metapolicy و اضافه کردن به hotel_policy
+            $metapolicy_formatted = $this->format_metapolicy($hotel_info['metapolicy_struct']);
+            if (!empty($metapolicy_formatted)) {
+                $current_policy = get_post_meta($post_id, 'hotel_policy', true);
+                if (!is_array($current_policy)) {
+                    $current_policy = [];
+                }
+                // Merge کردن با policies موجود
+                $current_policy = array_merge($current_policy, $metapolicy_formatted);
+                update_post_meta($post_id, 'hotel_policy', $current_policy);
+            }
         }
         
         if (!empty($hotel_info['metapolicy_extra_info'])) {
             update_post_meta($post_id, '_rh_extra_info', sanitize_textarea_field($hotel_info['metapolicy_extra_info']));
+            
+            // 🔥 NEW: اضافه کردن extra info به hotel_policy
+            $current_policy = get_post_meta($post_id, 'hotel_policy', true);
+            if (!is_array($current_policy)) {
+                $current_policy = [];
+            }
+            $current_policy[] = [
+                'title' => __('Extra Information', 'ratehawk-traveler'),
+                'policy_description' => '<p>' . esc_html($hotel_info['metapolicy_extra_info']) . '</p>'
+            ];
+            update_post_meta($post_id, 'hotel_policy', $current_policy);
         }
         
         // === Payment Methods ===
@@ -444,6 +467,225 @@ class RH_Hotel_Sync {
         }
         
         return $policies_array; // ✅ Return array, نه string
+    }
+    
+    /**
+     * Format metapolicy_struct to readable HTML for Traveler hotel_policy
+     */
+    private function format_metapolicy($metapolicy_struct) {
+        if (empty($metapolicy_struct)) {
+            return [];
+        }
+        
+        $metapolicy_items = [];
+        
+        // Children & Extra Beds
+        if (!empty($metapolicy_struct['children'])) {
+            $content = '<p>' . __('Children of all ages are welcome.', 'ratehawk-traveler') . '</p>';
+            $content .= '<p><strong>' . __('Crib and extra bed policies', 'ratehawk-traveler') . '</strong></p>';
+            $content .= '<table class="rh-policy-table">';
+            $content .= '<thead><tr><th>' . __('Age', 'ratehawk-traveler') . '</th><th>' . __('Type', 'ratehawk-traveler') . '</th><th>' . __('Price', 'ratehawk-traveler') . '</th></tr></thead>';
+            $content .= '<tbody>';
+            
+            foreach ($metapolicy_struct['children'] as $child) {
+                $age_range = sprintf('%d - %d years', $child['age_start'], $child['age_end']);
+                $price_text = $this->format_price($child['price'], $child['currency']);
+                
+                if ($child['extra_bed'] === 'available') {
+                    $bed_type = ($child['age_end'] <= 2) ? __('Crib upon request', 'ratehawk-traveler') : __('Extra bed upon request', 'ratehawk-traveler');
+                    $content .= sprintf(
+                        '<tr><td>%s</td><td>%s</td><td>%s</td></tr>',
+                        esc_html($age_range),
+                        esc_html($bed_type),
+                        esc_html($price_text)
+                    );
+                }
+            }
+            
+            $content .= '</tbody></table>';
+            $content .= '<div class="rh-policy-note">';
+            $content .= '<p>• ' . __('Prices for cribs and extra beds aren\'t included in the total price.', 'ratehawk-traveler') . '</p>';
+            $content .= '<p>• ' . __('The number of extra beds and cribs allowed depends on the option you choose.', 'ratehawk-traveler') . '</p>';
+            $content .= '<p>• ' . __('All cribs and extra beds are subject to availability.', 'ratehawk-traveler') . '</p>';
+            $content .= '</div>';
+            
+            $metapolicy_items[] = [
+                'title' => __('Children & Beds', 'ratehawk-traveler'),
+                'policy_description' => $content
+            ];
+        }
+        
+        // Meals
+        if (!empty($metapolicy_struct['meal']) || !empty($metapolicy_struct['children_meal'])) {
+            $content = '';
+            
+            if (!empty($metapolicy_struct['meal'])) {
+                foreach ($metapolicy_struct['meal'] as $meal) {
+                    $meal_name = ucfirst(str_replace('_', ' ', $meal['meal_type']));
+                    $price_text = $this->format_price($meal['price'], $meal['currency']);
+                    $content .= sprintf('<p>• %s: <strong>%s</strong> per person</p>', esc_html($meal_name), esc_html($price_text));
+                }
+            }
+            
+            if (!empty($metapolicy_struct['children_meal'])) {
+                $content .= '<p><strong>' . __('Children\'s meals', 'ratehawk-traveler') . '</strong></p>';
+                foreach ($metapolicy_struct['children_meal'] as $meal) {
+                    $age_range = sprintf('%d-%d years', $meal['age_start'], $meal['age_end']);
+                    $meal_name = ucfirst(str_replace('_', ' ', $meal['meal_type']));
+                    $price_text = $this->format_price($meal['price'], $meal['currency']);
+                    $content .= sprintf('<p>• %s for children aged %s: <strong>%s</strong></p>', esc_html($meal_name), esc_html($age_range), esc_html($price_text));
+                }
+            }
+            
+            $metapolicy_items[] = [
+                'title' => __('Meals', 'ratehawk-traveler'),
+                'policy_description' => $content
+            ];
+        }
+        
+        // Parking
+        if (!empty($metapolicy_struct['parking'])) {
+            $content = '';
+            
+            foreach ($metapolicy_struct['parking'] as $parking) {
+                $price_text = $this->format_price($parking['price'], $parking['currency']);
+                $unit = str_replace('_', ' ', $parking['price_unit']);
+                $status = ($parking['inclusion'] === 'included') ? __('Free', 'ratehawk-traveler') : '<strong>' . $price_text . '</strong> ' . $unit;
+                $territory = ($parking['territory_type'] !== 'unspecified') ? ucfirst($parking['territory_type']) . ' ' : '';
+                $content .= sprintf('<p>%s%s. %s</p>', esc_html($territory), __('parking available', 'ratehawk-traveler'), $status);
+            }
+            
+            $metapolicy_items[] = [
+                'title' => __('Parking', 'ratehawk-traveler'),
+                'policy_description' => $content
+            ];
+        }
+        
+        // Pets
+        if (!empty($metapolicy_struct['pets'])) {
+            $content = '';
+            
+            foreach ($metapolicy_struct['pets'] as $pet) {
+                if ($pet['inclusion'] === 'included') {
+                    $content .= '<p>' . __('Pets are allowed. Charges may apply.', 'ratehawk-traveler') . '</p>';
+                } else {
+                    $price_text = $this->format_price($pet['price'], $pet['currency']);
+                    $unit = str_replace('_', ' ', $pet['price_unit']);
+                    $content .= sprintf('<p>%s: <strong>%s</strong> %s</p>', __('Pets are allowed', 'ratehawk-traveler'), esc_html($price_text), esc_html($unit));
+                }
+            }
+            
+            $metapolicy_items[] = [
+                'title' => __('Pets', 'ratehawk-traveler'),
+                'policy_description' => $content
+            ];
+        }
+        
+        // Shuttle / Transfer
+        if (!empty($metapolicy_struct['shuttle'])) {
+            $content = '';
+            
+            foreach ($metapolicy_struct['shuttle'] as $shuttle) {
+                $destination = ucfirst(str_replace('_', '/', $shuttle['destination_type']));
+                if ($shuttle['inclusion'] === 'included') {
+                    $content .= sprintf('<p>• Free transfer to %s</p>', esc_html($destination));
+                } else {
+                    $price_text = $this->format_price($shuttle['price'], $shuttle['currency']);
+                    $type = ucfirst(str_replace('_', ' ', $shuttle['shuttle_type']));
+                    $content .= sprintf('<p>• Transfer to %s: <strong>%s</strong> (%s)</p>', esc_html($destination), esc_html($price_text), esc_html($type));
+                }
+            }
+            
+            $metapolicy_items[] = [
+                'title' => __('Transfer', 'ratehawk-traveler'),
+                'policy_description' => $content
+            ];
+        }
+        
+        // Internet
+        if (!empty($metapolicy_struct['internet'])) {
+            $content = '';
+            
+            foreach ($metapolicy_struct['internet'] as $internet) {
+                $area = ucfirst($internet['work_area']);
+                if ($internet['inclusion'] === 'included') {
+                    $content .= sprintf('<p>• Free WiFi available in %s</p>', esc_html($area));
+                } else {
+                    $price_text = $this->format_price($internet['price'], $internet['currency']);
+                    $unit = str_replace('_', ' ', $internet['price_unit']);
+                    $content .= sprintf('<p>• WiFi in %s: <strong>%s</strong> %s</p>', esc_html($area), esc_html($price_text), esc_html($unit));
+                }
+            }
+            
+            $metapolicy_items[] = [
+                'title' => __('Internet', 'ratehawk-traveler'),
+                'policy_description' => $content
+            ];
+        }
+        
+        // Deposit
+        if (!empty($metapolicy_struct['deposit'])) {
+            $content = '';
+            
+            foreach ($metapolicy_struct['deposit'] as $deposit) {
+                $type = ucfirst(str_replace('_', ' ', $deposit['deposit_type']));
+                $price_text = $this->format_price($deposit['price'], $deposit['currency']);
+                $unit = str_replace('_', ' ', $deposit['price_unit']);
+                
+                if ($deposit['deposit_type'] === 'keys') {
+                    $content .= sprintf('<p>• Keys deposit is required. Cost: <strong>%s</strong> %s</p>', esc_html($price_text), esc_html($unit));
+                } else {
+                    $content .= sprintf('<p>• %s deposit: <strong>%s</strong> %s</p>', esc_html($type), esc_html($price_text), esc_html($unit));
+                }
+            }
+            
+            $metapolicy_items[] = [
+                'title' => __('Special living conditions', 'ratehawk-traveler'),
+                'policy_description' => $content
+            ];
+        }
+        
+        // No Show Policy
+        if (!empty($metapolicy_struct['no_show'])) {
+            $time = $metapolicy_struct['no_show']['time'];
+            $period = str_replace('_', ' ', $metapolicy_struct['no_show']['day_period']);
+            $content = sprintf(
+                '<p>⚠️ %s</p>',
+                sprintf(__('If you do not check in to your room before %s %s, the booking will be cancelled.', 'ratehawk-traveler'), esc_html($time), esc_html($period))
+            );
+            
+            $metapolicy_items[] = [
+                'title' => __('Attention', 'ratehawk-traveler'),
+                'policy_description' => $content
+            ];
+        }
+        
+        // Visa Support
+        if (!empty($metapolicy_struct['visa']['visa_support']) && $metapolicy_struct['visa']['visa_support'] === 'support_enable') {
+            $content = '<p>• ' . __('You can request the documents necessary for a visa, the service is provided for an additional fee.', 'ratehawk-traveler') . '</p>';
+            
+            $metapolicy_items[] = [
+                'title' => __('Visa Support', 'ratehawk-traveler'),
+                'policy_description' => $content
+            ];
+        }
+        
+        return $metapolicy_items;
+    }
+    
+    /**
+     * Format price with currency
+     */
+    private function format_price($price, $currency) {
+        if (empty($price) || $price == '0') {
+            return __('Free', 'ratehawk-traveler');
+        }
+        
+        if (empty($currency)) {
+            return $price;
+        }
+        
+        return sprintf('%s %s', $currency, number_format((float)$price, 2));
     }
     
     /**
