@@ -290,7 +290,7 @@ class RH_Hotel_Sync {
         update_post_meta($post_id, '_is_ratehawk_hotel', 1);
         
         // ✅ Meta های ضروری برای Traveler Archive
-        update_post_meta($post_id, 'is_featured', 'off');
+        update_post_meta($post_id, 'is_featured', 'on');  // ✅ باید on باشه!
         update_post_meta($post_id, 'is_auto_caculate', 'on');
         update_post_meta($post_id, 'hotel_layout_style', '1');
         update_post_meta($post_id, 'map_zoom', '14');
