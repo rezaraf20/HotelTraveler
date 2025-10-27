@@ -1,9 +1,22 @@
 <?php
 /**
- * Hotel Sync Class - COMPLETE VERSION با تمام فیلدهای API
+ * Hotel Sync Class - با Auto-Taxonomies و محافظت از Term های عددی
  * File: includes/class-rh-hotel-sync.php
+ * Version: 2.1.0
+ * Date: 2025-10-27
  * 
- * این کلاس همه فیلدهای API رو Parse و ذخیره می‌کنه
+ * ✅ Features:
+ * - Auto-set Hotel Chain taxonomy
+ * - Auto-set Room Taxonomies (bathroom-type, bedding-type, room_type, view-type)
+ * - Auto-cleanup numeric terms
+ * - 3-layer protection against numeric terms
+ * - Smart mapping from API values
+ * 
+ * ⚠️ IMPORTANT: همه mapping ها از API میان و استاتیک نیستن!
+ * - kind: API گاهی ID میده که باید به Name تبدیل بشه
+ * - bathroom: همیشه عدد (0,1,2) → mapping به String
+ * - bedding: همیشه عدد (1-6) → mapping به String
+ * - class: همیشه عدد (1-3) → mapping به String
  */
 
 if (!defined('ABSPATH')) {
