@@ -692,6 +692,13 @@ class RH_Hotel_Sync {
      * ✅ ذخیره Taxonomies (با non_free_amenities)
      */
     private function save_hotel_taxonomies($post_id, $hotel_info) {
+        // 🧹 پاک‌سازی خودکار term های عددی (یکبار در هر sync)
+        static $cleanup_done = false;
+        if (!$cleanup_done) {
+            $this->cleanup_numeric_hotel_themes();
+            $cleanup_done = true;
+        }
+        
         if (!empty($hotel_info['amenity_groups'])) {
             $facility_ids = [];
             $non_free_amenities = [];
@@ -1656,5 +1663,53 @@ class RH_Hotel_Sync {
         } catch (Exception $e) {
             wp_send_json_error($e->getMessage());
         }
+    }
+    
+    /**
+     * 🧹 پاک‌سازی خودکار term های عددی از hotel-theme
+     * این function term هایی که اسمشون فقط عدد هست رو پاک میکنه
+     */
+    private function cleanup_numeric_hotel_themes() {
+        global $wpdb;
+        
+        // پیدا کردن term های عددی
+        $numeric_terms = $wpdb->get_results("
+            SELECT t.term_id, t.name 
+            FROM {$wpdb->terms} t
+            JOIN {$wpdb->term_taxonomy} tt ON t.term_id = tt.term_id
+            WHERE tt.taxonomy = 'hotel-theme'
+            AND t.name REGEXP '^[0-9]+$'
+        ");
+        
+        if (empty($numeric_terms)) {
+            return; // هیچ term عددی نیست
+        }
+        
+        foreach ($numeric_terms as $term) {
+            // حذف relationships
+            $wpdb->query($wpdb->prepare("
+                DELETE FROM {$wpdb->term_relationships}
+                WHERE term_taxonomy_id IN (
+                    SELECT term_taxonomy_id 
+                    FROM {$wpdb->term_taxonomy}
+                    WHERE term_id = %d
+                )
+            ", $term->term_id));
+            
+            // حذف taxonomy
+            $wpdb->delete($wpdb->term_taxonomy, ['term_id' => $term->term_id]);
+            
+            // حذف term
+            $wpdb->delete($wpdb->terms, ['term_id' => $term->term_id]);
+            
+            rh_log('Cleaned numeric hotel-theme term', [
+                'term_id' => $term->term_id,
+                'term_name' => $term->name
+            ], 'info');
+        }
+        
+        rh_log('Numeric hotel-theme cleanup completed', [
+            'total_cleaned' => count($numeric_terms)
+        ], 'info');
     }
 }
