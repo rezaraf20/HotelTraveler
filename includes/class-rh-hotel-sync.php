@@ -2,8 +2,8 @@
 /**
  * Hotel Sync Class - با Auto-Taxonomies و محافظت از Term های عددی
  * File: includes/class-rh-hotel-sync.php
- * Version: 2.1.0
- * Date: 2025-10-27
+ * Version: 2.2.0
+ * Date: 2025-10-27 (Updated)
  * 
  * ✅ Features:
  * - Auto-set Hotel Chain taxonomy
@@ -11,6 +11,12 @@
  * - Auto-cleanup numeric terms
  * - 3-layer protection against numeric terms
  * - Smart mapping from API values
+ * - Proper handling of wp_insert_term "term_exists" errors
+ * 
+ * ⚠️ FIX v2.2.0:
+ * - فیکس مشکل term_exists error که باعث ساخت term های عددی میشد
+ * - handle کردن WP_Error با error_code "term_exists"
+ * - validation در همه جاهایی که term میسازیم
  * 
  * ⚠️ IMPORTANT: همه mapping ها از API میان و استاتیک نیستن!
  * - kind: API گاهی ID میده که باید به Name تبدیل بشه
@@ -720,13 +726,31 @@ class RH_Hotel_Sync {
                 if (empty($group['amenities'])) continue;
                 
                 foreach ($group['amenities'] as $amenity) {
-                    $term_name = sanitize_text_field($amenity['name'] ?? $amenity);
+                    // Parse term name
+                    $term_name = is_array($amenity) ? ($amenity['name'] ?? '') : $amenity;
+                    $term_name = sanitize_text_field($term_name);
+                    
+                    // Validate: نباید خالی یا عدد باشه
+                    if (empty($term_name) || is_numeric($term_name)) {
+                        rh_log('WARNING: Invalid facility name (empty or numeric)', [
+                            'amenity' => $amenity,
+                            'post_id' => $post_id
+                        ], 'warning');
+                        continue;  // Skip این amenity
+                    }
+                    
                     $term = term_exists($term_name, 'hotel-facilities');
                     if (!$term) {
                         $term = wp_insert_term($term_name, 'hotel-facilities');
                     }
                     
-                    if (!is_wp_error($term) && isset($term['term_id'])) {
+                    // Handle wp_insert_term errors
+                    if (is_wp_error($term)) {
+                        if ($term->get_error_code() === 'term_exists') {
+                            $term_id = $term->get_error_data('term_exists');
+                            $facility_ids[] = intval($term_id);
+                        }
+                    } elseif (isset($term['term_id'])) {
                         $facility_ids[] = intval($term['term_id']);
                     }
                 }
@@ -833,7 +857,24 @@ class RH_Hotel_Sync {
                     $term = wp_insert_term($kind_name, 'hotel-theme');
                 }
                 
-                if (!is_wp_error($term) && isset($term['term_id'])) {
+                // Handle errors
+                if (is_wp_error($term)) {
+                    if ($term->get_error_code() === 'term_exists') {
+                        $term_id = $term->get_error_data('term_exists');
+                        wp_set_object_terms($post_id, [$term_id], 'hotel-theme');
+                        
+                        rh_log('Hotel theme set (existing)', [
+                            'post_id' => $post_id,
+                            'kind' => $kind_name,
+                            'term_id' => $term_id
+                        ], 'info');
+                    } else {
+                        rh_log('ERROR: Failed to create/find term', [
+                            'kind_name' => $kind_name,
+                            'error' => $term->get_error_message()
+                        ], 'error');
+                    }
+                } elseif (isset($term['term_id'])) {
                     wp_set_object_terms($post_id, [$term['term_id']], 'hotel-theme');
                     
                     rh_log('Hotel theme set', [
@@ -841,11 +882,6 @@ class RH_Hotel_Sync {
                         'kind' => $kind_name,
                         'term_id' => $term['term_id']
                     ], 'info');
-                } else {
-                    rh_log('ERROR: Failed to create/find term', [
-                        'kind_name' => $kind_name,
-                        'error' => is_wp_error($term) ? $term->get_error_message() : 'Unknown'
-                    ], 'error');
                 }
             } else {
                 rh_log('WARNING: Kind name is empty after processing', [
@@ -866,7 +902,19 @@ class RH_Hotel_Sync {
                     $term = wp_insert_term($chain_name, 'hotel-chain');
                 }
                 
-                if (!is_wp_error($term) && isset($term['term_id'])) {
+                // Handle errors
+                if (is_wp_error($term)) {
+                    if ($term->get_error_code() === 'term_exists') {
+                        $term_id = $term->get_error_data('term_exists');
+                        wp_set_object_terms($post_id, [$term_id], 'hotel-chain');
+                        
+                        rh_log('Hotel chain set (existing)', [
+                            'post_id' => $post_id,
+                            'chain' => $chain_name,
+                            'term_id' => $term_id
+                        ], 'info');
+                    }
+                } elseif (isset($term['term_id'])) {
                     wp_set_object_terms($post_id, [$term['term_id']], 'hotel-chain');
                     
                     rh_log('Hotel chain set', [
@@ -1430,14 +1478,30 @@ class RH_Hotel_Sync {
         $facility_ids = [];
         
         foreach ($room_group['room_amenities'] as $amenity) {
-            $term_name = ucwords(str_replace(['-', '_'], ' ', sanitize_text_field($amenity)));
+            $term_name = sanitize_text_field($amenity);
+            $term_name = ucwords(str_replace(['-', '_'], ' ', $term_name));
+            
+            // Validate: نباید خالی یا عدد باشه
+            if (empty($term_name) || is_numeric($term_name)) {
+                rh_log('WARNING: Invalid room facility name', [
+                    'amenity' => $amenity,
+                    'room_post_id' => $room_post_id
+                ], 'warning');
+                continue;
+            }
             
             $term = term_exists($term_name, 'room-facilities');
             if (!$term) {
                 $term = wp_insert_term($term_name, 'room-facilities');
             }
             
-            if (!is_wp_error($term) && isset($term['term_id'])) {
+            // Handle errors
+            if (is_wp_error($term)) {
+                if ($term->get_error_code() === 'term_exists') {
+                    $term_id = $term->get_error_data('term_exists');
+                    $facility_ids[] = intval($term_id);
+                }
+            } elseif (isset($term['term_id'])) {
                 $facility_ids[] = intval($term['term_id']);
             }
         }
@@ -1658,12 +1722,45 @@ class RH_Hotel_Sync {
         // Sanitize
         $term_name = sanitize_text_field($term_name);
         
-        $term = term_exists($term_name, $taxonomy);
-        if (!$term) {
-            $term = wp_insert_term($term_name, $taxonomy);
+        // دوباره چک کن بعد از sanitize
+        if (is_numeric($term_name)) {
+            rh_log('ERROR: Term name became numeric after sanitize', [
+                'room_post_id' => $room_post_id,
+                'taxonomy' => $taxonomy,
+                'term_name' => $term_name
+            ], 'error');
+            return;
         }
         
-        if (!is_wp_error($term) && isset($term['term_id'])) {
+        // ابتدا چک کن term وجود داره یا نه
+        $term = term_exists($term_name, $taxonomy);
+        
+        if (!$term) {
+            // term وجود نداره، بساز
+            $term = wp_insert_term($term_name, $taxonomy);
+            
+            // چک کن که wp_insert_term error نده
+            if (is_wp_error($term)) {
+                // اگه error "term_exists" بود، یعنی term وجود داره
+                if ($term->get_error_code() === 'term_exists') {
+                    // term_id از error data بگیر
+                    $term_id = $term->get_error_data('term_exists');
+                    $term = ['term_id' => $term_id];
+                } else {
+                    // error دیگه‌ای بود
+                    rh_log('ERROR: Failed to create term', [
+                        'room_post_id' => $room_post_id,
+                        'taxonomy' => $taxonomy,
+                        'term_name' => $term_name,
+                        'error' => $term->get_error_message()
+                    ], 'error');
+                    return;
+                }
+            }
+        }
+        
+        // حالا term_id رو داریم، اتاق رو بهش لینک کن
+        if (isset($term['term_id'])) {
             wp_set_object_terms($room_post_id, [$term['term_id']], $taxonomy);
             
             rh_log('Room taxonomy set', [
@@ -1672,13 +1769,6 @@ class RH_Hotel_Sync {
                 'term' => $term_name,
                 'term_id' => $term['term_id']
             ], 'debug');
-        } else if (is_wp_error($term)) {
-            rh_log('ERROR: Failed to create term', [
-                'room_post_id' => $room_post_id,
-                'taxonomy' => $taxonomy,
-                'term_name' => $term_name,
-                'error' => $term->get_error_message()
-            ], 'error');
         }
     }
     
