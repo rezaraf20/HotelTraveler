@@ -728,25 +728,52 @@ class RH_Hotel_Sync {
         
         // === Hotel Theme / Kind ===
         if (!empty($hotel_info['kind'])) {
-            // kind میتونه String یا Object باشه
+            $kind_name = null;
+            
+            // Debug log
+            rh_log('DEBUG: Kind raw data', [
+                'kind' => $hotel_info['kind'],
+                'type' => gettype($hotel_info['kind'])
+            ], 'debug');
+            
+            // حالت 1: Array/Object با name
             if (is_array($hotel_info['kind']) && isset($hotel_info['kind']['name'])) {
-                // اگر Object بود: {"name": "Apartment", "id": 164}
-                $kind_name = sanitize_text_field($hotel_info['kind']['name']);
-            } elseif (is_string($hotel_info['kind'])) {
-                // اگر String بود: "Apartment"
-                $kind_name = sanitize_text_field($hotel_info['kind']);
-            } else {
-                $kind_name = null;
+                $kind_name = $hotel_info['kind']['name'];
+            }
+            // حالت 2: String ساده
+            elseif (is_string($hotel_info['kind'])) {
+                $kind_name = $hotel_info['kind'];
+            }
+            // حالت 3: Object (stdClass)
+            elseif (is_object($hotel_info['kind']) && isset($hotel_info['kind']->name)) {
+                $kind_name = $hotel_info['kind']->name;
             }
             
+            // پاکسازی و validate
             if (!empty($kind_name)) {
-                // چک کردن یا ساختن term
+                $kind_name = trim($kind_name);
+                $kind_name = sanitize_text_field($kind_name);
+                
+                // چک کنیم که عدد نباشه
+                if (is_numeric($kind_name)) {
+                    rh_log('WARNING: Kind is numeric, skipping', [
+                        'kind_value' => $kind_name
+                    ], 'warning');
+                    $kind_name = null;
+                }
+            }
+            
+            // اگه valid بود، term بساز/پیدا کن
+            if (!empty($kind_name)) {
+                rh_log('DEBUG: Processing kind', [
+                    'kind_name' => $kind_name
+                ], 'debug');
+                
                 $term = term_exists($kind_name, 'hotel-theme');
                 if (!$term) {
                     $term = wp_insert_term($kind_name, 'hotel-theme');
                 }
                 
-                // اضافه کردن term به hotel
                 if (!is_wp_error($term) && isset($term['term_id'])) {
                     wp_set_object_terms($post_id, [$term['term_id']], 'hotel-theme');
                     
@@ -755,7 +782,16 @@ class RH_Hotel_Sync {
                         'kind' => $kind_name,
                         'term_id' => $term['term_id']
                     ], 'info');
+                } else {
+                    rh_log('ERROR: Failed to create/find term', [
+                        'kind_name' => $kind_name,
+                        'error' => is_wp_error($term) ? $term->get_error_message() : 'Unknown'
+                    ], 'error');
                 }
+            } else {
+                rh_log('WARNING: Kind name is empty after processing', [
+                    'raw_kind' => $hotel_info['kind']
+                ], 'warning');
             }
         }
     }
