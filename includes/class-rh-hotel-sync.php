@@ -743,7 +743,46 @@ class RH_Hotel_Sync {
                 'type' => gettype($hotel_info['kind'])
             ], 'debug');
             
-            // حالت 1: Array/Object با name
+            // ⚠️ اگه kind عدد (Integer) هست، تبدیل کن به Name
+            if (is_int($hotel_info['kind']) || (is_string($hotel_info['kind']) && is_numeric($hotel_info['kind']))) {
+                $kind_id = (int)$hotel_info['kind'];
+                
+                // Mapping شناخته شده
+                $kind_mapping = [
+                    164 => 'Apartment',
+                    165 => 'Hotel',
+                    166 => 'Resort',
+                    167 => 'Villa',
+                    168 => 'Hostel',
+                    169 => 'Guest House',
+                    170 => 'Motel',
+                    171 => 'Boutique Hotel',
+                    172 => 'Bed and Breakfast',
+                    187 => 'Apartment',  // از API شناسایی شده
+                ];
+                
+                if (isset($kind_mapping[$kind_id])) {
+                    // تبدیل ID به Name
+                    $hotel_info['kind'] = $kind_mapping[$kind_id];
+                    
+                    rh_log('INFO: Converted numeric kind to name', [
+                        'kind_id' => $kind_id,
+                        'kind_name' => $hotel_info['kind'],
+                        'post_id' => $post_id
+                    ], 'info');
+                } else {
+                    // ID ناشناخته
+                    rh_log('ERROR: Unknown kind ID, skipping', [
+                        'kind_id' => $kind_id,
+                        'post_id' => $post_id
+                    ], 'error');
+                    // Skip kind برای این هتل
+                    $hotel_info['kind'] = null;
+                }
+            }
+            
+            // حالا فقط اگه kind معتبر بود، ادامه بده
+            if (!empty($hotel_info['kind']) && !is_numeric($hotel_info['kind'])) {
             if (is_array($hotel_info['kind']) && isset($hotel_info['kind']['name'])) {
                 $kind_name = $hotel_info['kind']['name'];
             }
@@ -761,9 +800,9 @@ class RH_Hotel_Sync {
                 $kind_name = trim($kind_name);
                 $kind_name = sanitize_text_field($kind_name);
                 
-                // چک کنیم که عدد نباشه
+                // دوباره چک کن که بعد از sanitize عدد نشده باشه
                 if (is_numeric($kind_name)) {
-                    rh_log('WARNING: Kind is numeric, skipping', [
+                    rh_log('WARNING: Kind became numeric after sanitize', [
                         'kind_value' => $kind_name
                     ], 'warning');
                     $kind_name = null;
@@ -800,6 +839,7 @@ class RH_Hotel_Sync {
                     'raw_kind' => $hotel_info['kind']
                 ], 'warning');
             }
+            } // بستن if (!empty($hotel_info['kind']))
         }
     }
     
