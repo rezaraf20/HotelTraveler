@@ -2,8 +2,8 @@
 /**
  * Hotel Sync Class - با Auto-Taxonomies و محافظت از Term های عددی
  * File: includes/class-rh-hotel-sync.php
- * Version: 2.2.0
- * Date: 2025-10-27 (Updated)
+ * Version: 2.3.0-test (do_action disabled for testing)
+ * Date: 2025-10-27 (Test Build)
  * 
  * ✅ Features:
  * - Auto-set Hotel Chain taxonomy
@@ -1259,8 +1259,9 @@ class RH_Hotel_Sync {
         
         clean_post_cache($room_post_id);
         
-        do_action('save_post', $room_post_id, get_post($room_post_id), false);
-        do_action('save_post_hotel_room', $room_post_id, get_post($room_post_id), false);
+        // ⚠️ TEMPORARY DISABLED FOR TESTING
+        // do_action('save_post', $room_post_id, get_post($room_post_id), false);
+        // do_action('save_post_hotel_room', $room_post_id, get_post($room_post_id), false);
         
         delete_transient('st_hotel_min_price_' . $hotel_post_id);
         wp_cache_delete($hotel_post_id, 'posts');
