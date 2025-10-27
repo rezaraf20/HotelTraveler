@@ -1458,6 +1458,23 @@ class RH_Hotel_Sync {
             
             $bathroom_type = $bathroom_mapping[$rg_ext['bathroom']] ?? null;
             
+            // اگه mapping نداشت، log کن
+            if ($bathroom_type === null && $rg_ext['bathroom'] !== 0) {
+                rh_log('WARNING: Unknown bathroom type value', [
+                    'room_post_id' => $room_post_id,
+                    'bathroom_value' => $rg_ext['bathroom']
+                ], 'warning');
+            }
+            
+            // مطمئن شو عدد نیست
+            if ($bathroom_type && is_numeric($bathroom_type)) {
+                rh_log('ERROR: Bathroom type is numeric, skipping', [
+                    'room_post_id' => $room_post_id,
+                    'value' => $bathroom_type
+                ], 'error');
+                $bathroom_type = null;
+            }
+            
             if ($bathroom_type) {
                 $this->set_room_term($room_post_id, $bathroom_type, 'bathroom-type');
             }
@@ -1499,6 +1516,23 @@ class RH_Hotel_Sync {
             ];
             
             $bedding_type = $bedding_mapping[$rg_ext['bedding']] ?? null;
+            
+            // اگه mapping نداشت، log کن
+            if ($bedding_type === null) {
+                rh_log('WARNING: Unknown bedding type value', [
+                    'room_post_id' => $room_post_id,
+                    'bedding_value' => $rg_ext['bedding']
+                ], 'warning');
+            }
+        }
+        
+        // مطمئن شو عدد نیست
+        if ($bedding_type && is_numeric($bedding_type)) {
+            rh_log('ERROR: Bedding type is numeric, skipping', [
+                'room_post_id' => $room_post_id,
+                'value' => $bedding_type
+            ], 'error');
+            $bedding_type = null;
         }
         
         if ($bedding_type) {
@@ -1540,6 +1574,23 @@ class RH_Hotel_Sync {
             ];
             
             $room_type = $class_mapping[$rg_ext['class']] ?? null;
+            
+            // اگه mapping نداشت و عدد بود، Skip کن
+            if ($room_type === null && is_numeric($rg_ext['class'])) {
+                rh_log('WARNING: Unknown room class value', [
+                    'room_post_id' => $room_post_id,
+                    'class_value' => $rg_ext['class']
+                ], 'warning');
+            }
+        }
+        
+        // مطمئن شو که room_type عدد نیست!
+        if ($room_type && is_numeric($room_type)) {
+            rh_log('ERROR: Room type is numeric, skipping', [
+                'room_post_id' => $room_post_id,
+                'room_type_value' => $room_type
+            ], 'error');
+            $room_type = null;
         }
         
         // همچنین چک کن rg_ext flags
@@ -1580,6 +1631,20 @@ class RH_Hotel_Sync {
      * Helper: Set single term for room
      */
     private function set_room_term($room_post_id, $term_name, $taxonomy) {
+        // ⚠️ CRITICAL: مطمئن شو term_name عدد نیست!
+        if (empty($term_name) || is_numeric($term_name)) {
+            rh_log('ERROR: Invalid term name (empty or numeric)', [
+                'room_post_id' => $room_post_id,
+                'taxonomy' => $taxonomy,
+                'term_name' => $term_name,
+                'type' => gettype($term_name)
+            ], 'error');
+            return;  // Skip!
+        }
+        
+        // Sanitize
+        $term_name = sanitize_text_field($term_name);
+        
         $term = term_exists($term_name, $taxonomy);
         if (!$term) {
             $term = wp_insert_term($term_name, $taxonomy);
@@ -1594,6 +1659,13 @@ class RH_Hotel_Sync {
                 'term' => $term_name,
                 'term_id' => $term['term_id']
             ], 'debug');
+        } else if (is_wp_error($term)) {
+            rh_log('ERROR: Failed to create term', [
+                'room_post_id' => $room_post_id,
+                'taxonomy' => $taxonomy,
+                'term_name' => $term_name,
+                'error' => $term->get_error_message()
+            ], 'error');
         }
     }
     
