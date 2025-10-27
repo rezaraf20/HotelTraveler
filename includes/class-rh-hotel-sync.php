@@ -1438,6 +1438,13 @@ class RH_Hotel_Sync {
      * ✅ Set Room Taxonomies (bathroom, bedding, room_type, view)
      */
     private function save_room_taxonomies($room_post_id, $room_group) {
+        // 🧹 پاک‌سازی term های عددی (یکبار)
+        static $room_cleanup_done = false;
+        if (!$room_cleanup_done) {
+            $this->cleanup_numeric_room_terms();
+            $room_cleanup_done = true;
+        }
+        
         $rg_ext = $room_group['rg_ext'] ?? [];
         $name_struct = $room_group['name_struct'] ?? [];
         
@@ -1932,5 +1939,62 @@ class RH_Hotel_Sync {
         rh_log('Numeric hotel-theme cleanup completed', [
             'total_cleaned' => count($numeric_terms)
         ], 'info');
+    }
+    
+    /**
+     * 🧹 پاک‌سازی خودکار term های عددی از Room taxonomies
+     */
+    private function cleanup_numeric_room_terms() {
+        global $wpdb;
+        
+        $room_taxonomies = ['bathroom-type', 'bedding-type', 'room_type', 'view-type'];
+        $total_cleaned = 0;
+        
+        foreach ($room_taxonomies as $taxonomy) {
+            // پیدا کردن term های عددی
+            $numeric_terms = $wpdb->get_results($wpdb->prepare("
+                SELECT t.term_id, t.name 
+                FROM {$wpdb->terms} t
+                JOIN {$wpdb->term_taxonomy} tt ON t.term_id = tt.term_id
+                WHERE tt.taxonomy = %s
+                AND t.name REGEXP '^[0-9]+$'
+            ", $taxonomy));
+            
+            if (empty($numeric_terms)) {
+                continue;
+            }
+            
+            foreach ($numeric_terms as $term) {
+                // حذف relationships
+                $wpdb->query($wpdb->prepare("
+                    DELETE FROM {$wpdb->term_relationships}
+                    WHERE term_taxonomy_id IN (
+                        SELECT term_taxonomy_id 
+                        FROM {$wpdb->term_taxonomy}
+                        WHERE term_id = %d
+                    )
+                ", $term->term_id));
+                
+                // حذف taxonomy
+                $wpdb->delete($wpdb->term_taxonomy, ['term_id' => $term->term_id]);
+                
+                // حذف term
+                $wpdb->delete($wpdb->terms, ['term_id' => $term->term_id]);
+                
+                rh_log('Cleaned numeric room term', [
+                    'taxonomy' => $taxonomy,
+                    'term_id' => $term->term_id,
+                    'term_name' => $term->name
+                ], 'info');
+                
+                $total_cleaned++;
+            }
+        }
+        
+        if ($total_cleaned > 0) {
+            rh_log('Numeric room terms cleanup completed', [
+                'total_cleaned' => $total_cleaned
+            ], 'info');
+        }
     }
 }
