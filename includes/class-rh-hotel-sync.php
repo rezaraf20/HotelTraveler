@@ -726,15 +726,36 @@ class RH_Hotel_Sync {
             }
         }
         
+        // === Hotel Theme / Kind ===
         if (!empty($hotel_info['kind'])) {
-            $kind_name = sanitize_text_field($hotel_info['kind']['name'] ?? $hotel_info['kind']);
-            $term = term_exists($kind_name, 'hotel-theme');
-            if (!$term) {
-                $term = wp_insert_term($kind_name, 'hotel-theme');
+            // kind میتونه String یا Object باشه
+            if (is_array($hotel_info['kind']) && isset($hotel_info['kind']['name'])) {
+                // اگر Object بود: {"name": "Apartment", "id": 164}
+                $kind_name = sanitize_text_field($hotel_info['kind']['name']);
+            } elseif (is_string($hotel_info['kind'])) {
+                // اگر String بود: "Apartment"
+                $kind_name = sanitize_text_field($hotel_info['kind']);
+            } else {
+                $kind_name = null;
             }
             
-            if (!is_wp_error($term) && isset($term['term_id'])) {
-                wp_set_object_terms($post_id, [$term['term_id']], 'hotel-theme');
+            if (!empty($kind_name)) {
+                // چک کردن یا ساختن term
+                $term = term_exists($kind_name, 'hotel-theme');
+                if (!$term) {
+                    $term = wp_insert_term($kind_name, 'hotel-theme');
+                }
+                
+                // اضافه کردن term به hotel
+                if (!is_wp_error($term) && isset($term['term_id'])) {
+                    wp_set_object_terms($post_id, [$term['term_id']], 'hotel-theme');
+                    
+                    rh_log('Hotel theme set', [
+                        'post_id' => $post_id,
+                        'kind' => $kind_name,
+                        'term_id' => $term['term_id']
+                    ], 'info');
+                }
             }
         }
     }
