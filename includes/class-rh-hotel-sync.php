@@ -841,6 +841,29 @@ class RH_Hotel_Sync {
             }
             } // بستن if (!empty($hotel_info['kind']))
         }
+        
+        // === Hotel Chain ===
+        if (!empty($hotel_info['hotel_chain'])) {
+            $chain_name = sanitize_text_field($hotel_info['hotel_chain']);
+            
+            // فقط اگه "No chain" نباشه
+            if ($chain_name !== 'No chain' && $chain_name !== 'Independent') {
+                $term = term_exists($chain_name, 'hotel-chain');
+                if (!$term) {
+                    $term = wp_insert_term($chain_name, 'hotel-chain');
+                }
+                
+                if (!is_wp_error($term) && isset($term['term_id'])) {
+                    wp_set_object_terms($post_id, [$term['term_id']], 'hotel-chain');
+                    
+                    rh_log('Hotel chain set', [
+                        'post_id' => $post_id,
+                        'chain' => $chain_name,
+                        'term_id' => $term['term_id']
+                    ], 'info');
+                }
+            }
+        }
     }
     
     /**
@@ -1164,6 +1187,7 @@ class RH_Hotel_Sync {
         
         $this->save_room_meta($room_post_id, $hotel_post_id, $room_group);
         $this->save_room_facilities($room_post_id, $room_group);
+        $this->save_room_taxonomies($room_post_id, $room_group);  // ← جدید
         $this->attach_room_images($room_post_id, $room_group);
         
         wp_update_post([
@@ -1411,6 +1435,162 @@ class RH_Hotel_Sync {
     }
     
     /**
+     * ✅ Set Room Taxonomies (bathroom, bedding, room_type, view)
+     */
+    private function save_room_taxonomies($room_post_id, $room_group) {
+        $rg_ext = $room_group['rg_ext'] ?? [];
+        $name_struct = $room_group['name_struct'] ?? [];
+        
+        // === 1. Bathroom Type ===
+        if (isset($rg_ext['bathroom'])) {
+            $bathroom_mapping = [
+                0 => null,
+                1 => 'Shared Bathroom',
+                2 => 'Private Bathroom',
+            ];
+            
+            $bathroom_type = $bathroom_mapping[$rg_ext['bathroom']] ?? null;
+            
+            if ($bathroom_type) {
+                $this->set_room_term($room_post_id, $bathroom_type, 'bathroom-type');
+            }
+        }
+        
+        // === 2. Bedding Type ===
+        $bedding_type = null;
+        
+        // ابتدا از name_struct بگیر (دقیق‌تره)
+        if (!empty($name_struct['bedding_type'])) {
+            $bedding_str = strtolower($name_struct['bedding_type']);
+            
+            if (strpos($bedding_str, 'king') !== false) {
+                $bedding_type = 'King Bed';
+            } elseif (strpos($bedding_str, 'queen') !== false) {
+                $bedding_type = 'Queen Bed';
+            } elseif (strpos($bedding_str, 'full double') !== false || strpos($bedding_str, 'double') !== false) {
+                $bedding_type = 'Double Bed';
+            } elseif (strpos($bedding_str, 'twin') !== false || strpos($bedding_str, '2 single') !== false) {
+                $bedding_type = 'Twin Beds';
+            } elseif (strpos($bedding_str, 'single') !== false) {
+                $bedding_type = 'Single Bed';
+            } elseif (strpos($bedding_str, 'bunk') !== false) {
+                $bedding_type = 'Bunk Bed';
+            } elseif (strpos($bedding_str, 'sofa') !== false) {
+                $bedding_type = 'Sofa Bed';
+            }
+        }
+        
+        // اگه پیدا نشد، از rg_ext.bedding استفاده کن
+        if (!$bedding_type && isset($rg_ext['bedding'])) {
+            $bedding_mapping = [
+                1 => 'Single Bed',
+                2 => 'Twin Beds',
+                3 => 'Double Bed',
+                4 => 'Queen Bed',
+                5 => 'King Bed',
+                6 => 'Bunk Bed',
+            ];
+            
+            $bedding_type = $bedding_mapping[$rg_ext['bedding']] ?? null;
+        }
+        
+        if ($bedding_type) {
+            $this->set_room_term($room_post_id, $bedding_type, 'bedding-type');
+        }
+        
+        // === 3. Room Type ===
+        $room_type = null;
+        
+        // از name_struct.main_name استخراج کن
+        if (!empty($name_struct['main_name'])) {
+            $main_name = strtolower($name_struct['main_name']);
+            
+            if (strpos($main_name, 'suite') !== false) {
+                $room_type = 'Suite';
+            } elseif (strpos($main_name, 'deluxe') !== false) {
+                $room_type = 'Deluxe';
+            } elseif (strpos($main_name, 'standard') !== false) {
+                $room_type = 'Standard';
+            } elseif (strpos($main_name, 'studio') !== false) {
+                $room_type = 'Studio';
+            } elseif (strpos($main_name, 'apartment') !== false) {
+                $room_type = 'Apartment';
+            } elseif (strpos($main_name, 'dorm') !== false) {
+                $room_type = 'Dorm';
+            } elseif (strpos($main_name, 'family') !== false) {
+                $room_type = 'Family Room';
+            } elseif (strpos($main_name, 'executive') !== false) {
+                $room_type = 'Executive';
+            }
+        }
+        
+        // اگه پیدا نشد، از rg_ext بگیر
+        if (!$room_type && isset($rg_ext['class'])) {
+            $class_mapping = [
+                1 => 'Standard',
+                2 => 'Deluxe',
+                3 => 'Suite',
+            ];
+            
+            $room_type = $class_mapping[$rg_ext['class']] ?? null;
+        }
+        
+        // همچنین چک کن rg_ext flags
+        if ($room_type && !empty($rg_ext['club'])) {
+            $room_type = 'Club ' . $room_type;
+        }
+        
+        if ($room_type) {
+            $this->set_room_term($room_post_id, $room_type, 'room_type');
+        }
+        
+        // === 4. View Type ===
+        if (!empty($rg_ext['view'])) {
+            $view_type = 'View';
+            
+            // سعی کن از name مشخص کنی چه ویویی
+            if (!empty($name_struct['main_name'])) {
+                $name_lower = strtolower($name_struct['main_name']);
+                
+                if (strpos($name_lower, 'sea view') !== false || strpos($name_lower, 'ocean view') !== false) {
+                    $view_type = 'Sea View';
+                } elseif (strpos($name_lower, 'city view') !== false) {
+                    $view_type = 'City View';
+                } elseif (strpos($name_lower, 'garden view') !== false) {
+                    $view_type = 'Garden View';
+                } elseif (strpos($name_lower, 'mountain view') !== false) {
+                    $view_type = 'Mountain View';
+                } elseif (strpos($name_lower, 'pool view') !== false) {
+                    $view_type = 'Pool View';
+                }
+            }
+            
+            $this->set_room_term($room_post_id, $view_type, 'view-type');
+        }
+    }
+    
+    /**
+     * Helper: Set single term for room
+     */
+    private function set_room_term($room_post_id, $term_name, $taxonomy) {
+        $term = term_exists($term_name, $taxonomy);
+        if (!$term) {
+            $term = wp_insert_term($term_name, $taxonomy);
+        }
+        
+        if (!is_wp_error($term) && isset($term['term_id'])) {
+            wp_set_object_terms($room_post_id, [$term['term_id']], $taxonomy);
+            
+            rh_log('Room taxonomy set', [
+                'room_post_id' => $room_post_id,
+                'taxonomy' => $taxonomy,
+                'term' => $term_name,
+                'term_id' => $term['term_id']
+            ], 'debug');
+        }
+    }
+    
+    /**
      * ✅ دانلود تصاویر اتاق (با پشتیبانی images_ext)
      */
     private function attach_room_images($room_post_id, $room_group) {
@@ -1526,6 +1706,7 @@ class RH_Hotel_Sync {
         $hotel_post_id = get_post_meta($room_post_id, 'room_parent', true);
         $this->save_room_meta($room_post_id, $hotel_post_id, $room_group);
         $this->save_room_facilities($room_post_id, $room_group);
+        $this->save_room_taxonomies($room_post_id, $room_group);  // ← جدید
         
         rh_log('Room updated', ['room_post_id' => $room_post_id], 'info');
         
