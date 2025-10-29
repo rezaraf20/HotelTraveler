@@ -11,6 +11,7 @@
     const RH_RoomRates = {
         
         cache: {}, // Cache برای rates
+        metapolicy: {}, // Metapolicy هتل
         
         init: function() {
             console.log('🚀 RH_RoomRates.init() called');
@@ -126,7 +127,13 @@
             const cacheKey = `${searchParams.checkin}_${searchParams.checkout}_${searchParams.adults}`;
             if (this.cache[cacheKey]) {
                 console.log('✅ Using cached rates!');
-                this.processAllRates(this.cache[cacheKey]);
+                
+                // بازیابی metapolicy از cache
+                if (this.cache[cacheKey].metapolicy) {
+                    this.metapolicy = this.cache[cacheKey].metapolicy;
+                }
+                
+                this.processAllRates(this.cache[cacheKey].rates || this.cache[cacheKey]);
                 return;
             }
             
@@ -149,11 +156,17 @@
                     console.log('✅ Rates received:', response);
                     
                     if (response.success && response.data) {
+                        // ذخیره metapolicy
+                        if (response.data.metapolicy) {
+                            this.metapolicy = response.data.metapolicy;
+                            console.log('📋 Metapolicy loaded:', this.metapolicy);
+                        }
+                        
                         // ذخیره در cache
                         this.cache[cacheKey] = response.data;
                         
                         // پردازش rates
-                        this.processAllRates(response.data);
+                        this.processAllRates(response.data.rates || response.data);
                     } else {
                         console.error('❌ No rates available');
                     }
@@ -258,39 +271,79 @@
          * استخراج قیمت از structure API
          */
         extractPrice: function(rate) {
+            let basePrice = null;
+            
             // تلاش 1: payment_options
             if (rate.payment_options?.payment_types?.[0]) {
                 const payment = rate.payment_options.payment_types[0];
-                return {
+                basePrice = {
                     amount: parseFloat(payment.show_amount || payment.amount || 0),
-                    currency: payment.currency_code || 'USD',
-                    formatted: this.formatPrice(payment.show_amount || payment.amount, payment.currency_code)
+                    currency: payment.currency_code || 'USD'
                 };
             }
-            
             // تلاش 2: daily_prices
-            if (rate.daily_prices && rate.daily_prices.length > 0) {
+            else if (rate.daily_prices && rate.daily_prices.length > 0) {
                 const total = rate.daily_prices.reduce((sum, day) => sum + parseFloat(day.amount || 0), 0);
-                const currency = rate.daily_prices[0].currency || 'USD';
-                return {
+                basePrice = {
                     amount: total,
-                    currency: currency,
-                    formatted: this.formatPrice(total, currency)
+                    currency: rate.daily_prices[0].currency || 'USD'
                 };
             }
-            
             // تلاش 3: rate.amount یا rate.price
-            if (rate.amount || rate.price) {
-                const amount = parseFloat(rate.amount || rate.price);
-                const currency = rate.currency || 'USD';
-                return {
-                    amount: amount,
-                    currency: currency,
-                    formatted: this.formatPrice(amount, currency)
+            else if (rate.amount || rate.price) {
+                basePrice = {
+                    amount: parseFloat(rate.amount || rate.price),
+                    currency: rate.currency || 'USD'
                 };
             }
             
-            return null;
+            if (!basePrice) {
+                return null;
+            }
+            
+            // اضافه کردن قیمت meal (اگه not_included باشه)
+            const mealPrice = this.getMealPrice(rate);
+            if (mealPrice > 0) {
+                basePrice.amount += mealPrice;
+                console.log('💰 Added meal price:', mealPrice, 'to base:', basePrice.amount - mealPrice);
+            }
+            
+            basePrice.formatted = this.formatPrice(basePrice.amount, basePrice.currency);
+            
+            return basePrice;
+        },
+        
+        /**
+         * گرفتن قیمت meal از metapolicy
+         */
+        getMealPrice: function(rate) {
+            // چک کردن meal type در rate
+            const mealType = rate.meal || rate.meal_type || '';
+            
+            if (!mealType || mealType === 'nomeal' || mealType === 'room_only') {
+                return 0;
+            }
+            
+            // اگه meal included باشه، قیمتش صفره
+            if (rate.meal_included || rate.payment_options?.meal_included) {
+                return 0;
+            }
+            
+            // جستجو در metapolicy
+            if (!this.metapolicy || !this.metapolicy.meal) {
+                return 0;
+            }
+            
+            const meal = this.metapolicy.meal.find(m => 
+                m.meal_type === mealType || 
+                m.meal_type === mealType.toLowerCase()
+            );
+            
+            if (meal && meal.inclusion === 'not_included') {
+                return parseFloat(meal.price || 0);
+            }
+            
+            return 0;
         },
         
         /**
