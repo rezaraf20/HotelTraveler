@@ -1407,7 +1407,7 @@ class RH_Hotel_Sync {
         }
         
         // === Traveler Required ===
-        update_post_meta($room_post_id, 'booking_option', 'enquire');
+        update_post_meta($room_post_id, 'booking_option', 'instant');  // RateHawk is always instant
         update_post_meta($room_post_id, 'price', 0);
         update_post_meta($room_post_id, '_rh_dynamic_pricing', 1);
         update_post_meta($room_post_id, 'is_sale', 'off');
@@ -1420,6 +1420,15 @@ class RH_Hotel_Sync {
         update_post_meta($room_post_id, 'default_state', 'available');
         update_post_meta($room_post_id, '_rh_room_full_data', wp_json_encode($room_group));
         update_post_meta($room_post_id, '_rh_last_sync', current_time('mysql'));
+        
+        // Cancellation policy (default: allow with free cancellation)
+        update_post_meta($room_post_id, 'allow_cancel', 'on');
+        update_post_meta($room_post_id, 'st_allow_cancel', 'on');
+        update_post_meta($room_post_id, 'cancel_number_days', 1);  // 1 day before
+        update_post_meta($room_post_id, 'st_cancel_percent', 0);  // Free cancellation
+        
+        // Extra prices from metapolicy (will be populated dynamically)
+        $this->sync_extra_prices_from_metapolicy($room_post_id, $hotel_post_id);
         
         update_post_meta($room_post_id, '_edit_last', get_current_user_id());
         update_post_meta($room_post_id, '_edit_lock', time() . ':' . get_current_user_id());
@@ -1445,6 +1454,94 @@ class RH_Hotel_Sync {
         update_post_meta($room_post_id, 'multi_location', 'off');
         
         $this->generate_room_calendar($room_post_id);
+    }
+    
+    /**
+     * Sync extra prices from hotel metapolicy
+     */
+    private function sync_extra_prices_from_metapolicy($room_post_id, $hotel_post_id) {
+        $metapolicy_json = get_post_meta($hotel_post_id, '_rh_metapolicy', true);
+        
+        if (empty($metapolicy_json)) {
+            return;
+        }
+        
+        $metapolicy = json_decode($metapolicy_json, true);
+        if (!$metapolicy) {
+            return;
+        }
+        
+        $extra_prices = [];
+        
+        // Meals
+        if (!empty($metapolicy['meal'])) {
+            foreach ($metapolicy['meal'] as $meal) {
+                if ($meal['inclusion'] === 'not_included' && !empty($meal['price'])) {
+                    $meal_name = ucfirst(str_replace('_', ' ', $meal['meal_type']));
+                    $extra_prices[] = [
+                        'title' => $meal_name,  // برای Admin Edit Screen
+                        'extra_name' => $meal_name,
+                        'extra_max_number' => 10,
+                        'extra_price' => floatval($meal['price']),
+                        'extra_required' => 'off'
+                    ];
+                }
+            }
+        }
+        
+        // Parking
+        if (!empty($metapolicy['parking'])) {
+            foreach ($metapolicy['parking'] as $parking) {
+                if ($parking['inclusion'] === 'not_included' && !empty($parking['price'])) {
+                    $extra_prices[] = [
+                        'title' => 'Parking',
+                        'extra_name' => 'Parking',
+                        'extra_max_number' => 5,
+                        'extra_price' => floatval($parking['price']),
+                        'extra_required' => 'off'
+                    ];
+                }
+            }
+        }
+        
+        // Pets
+        if (!empty($metapolicy['pets'])) {
+            foreach ($metapolicy['pets'] as $pet) {
+                if ($pet['inclusion'] === 'not_included' && !empty($pet['price'])) {
+                    $extra_prices[] = [
+                        'title' => 'Pet Fee',
+                        'extra_name' => 'Pet Fee',
+                        'extra_max_number' => 3,
+                        'extra_price' => floatval($pet['price']),
+                        'extra_required' => 'off'
+                    ];
+                }
+            }
+        }
+        
+        // Internet (room)
+        if (!empty($metapolicy['internet'])) {
+            foreach ($metapolicy['internet'] as $internet) {
+                if ($internet['work_area'] === 'room' && $internet['inclusion'] === 'not_included' && !empty($internet['price'])) {
+                    $extra_prices[] = [
+                        'title' => 'WiFi (In-Room)',
+                        'extra_name' => 'WiFi (In-Room)',
+                        'extra_max_number' => 1,
+                        'extra_price' => floatval($internet['price']),
+                        'extra_required' => 'off'
+                    ];
+                }
+            }
+        }
+        
+        if (!empty($extra_prices)) {
+            update_post_meta($room_post_id, 'extra_price', $extra_prices);
+            
+            rh_log('Extra prices synced from metapolicy', [
+                'room_post_id' => $room_post_id,
+                'count' => count($extra_prices)
+            ], 'info');
+        }
     }
     
     private function generate_room_calendar($room_post_id) {
