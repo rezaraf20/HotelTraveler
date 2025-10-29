@@ -107,9 +107,11 @@ final class Ratehawk_Traveler {
         require_once RH_PLUGIN_DIR . 'includes/class-rh-traveler-form-integration.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-prebook.php';
         
+        // Simple Rates - همیشه load میشه (برای AJAX)
+        require_once RH_PLUGIN_DIR . 'includes/class-rh-simple-rates.php';
+
         // Frontend
-        if (!is_admin()) {
-            require_once RH_PLUGIN_DIR . 'includes/class-rh-simple-rates.php';
+        if (!is_admin()) {   
             require_once RH_PLUGIN_DIR . 'includes/class-rh-search.php';
         }
         
@@ -126,7 +128,7 @@ final class Ratehawk_Traveler {
         add_action('plugins_loaded', [$this, 'init'], 0);
         add_action('init', [$this, 'load_textdomain']);
         
-        // 🔥 NEW: Enqueue frontend styles for metapolicy
+        // Frontend styles
         add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
         
         if (is_admin()) {
@@ -135,13 +137,18 @@ final class Ratehawk_Traveler {
     }
     
     public function init() {
+        // Initialize Simple Rates (برای AJAX و Frontend)
+        // CRITICAL: این باید قبل از is_admin چک بشه
+        if (rh_is_configured()) {
+            RH_Simple_Rates::instance();
+        }
+        
         // Initialize Admin
         if (is_admin()) {
             RH_Admin::instance();
         } else {
-            // Initialize Frontend Rates
+            // Initialize Frontend Search
             if (rh_is_configured()) {
-                RH_Simple_Rates::instance();
                 RH_Search::instance();
             }
         }
@@ -187,7 +194,7 @@ final class Ratehawk_Traveler {
     }
     
     /**
-     * 🔥 NEW: Enqueue frontend assets for metapolicy display
+     * Enqueue frontend assets
      */
     public function enqueue_frontend_assets() {
         // فقط در صفحه هتل
@@ -201,13 +208,8 @@ final class Ratehawk_Traveler {
             return;
         }
         
-        // Enqueue metapolicy styles
-        wp_enqueue_style(
-            'ratehawk-metapolicy',
-            RH_PLUGIN_URL . 'assets/css/metapolicy.css',
-            [],
-            RH_VERSION
-        );
+        // Enqueue metapolicy styles (if needed)
+        // wp_enqueue_style('ratehawk-metapolicy', RH_PLUGIN_URL . 'assets/css/metapolicy.css', [], RH_VERSION);
     }
     
     public function cache() {
