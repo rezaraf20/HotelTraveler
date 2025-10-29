@@ -461,13 +461,78 @@
         },
 
         getSearchParams: function() {
+            // تلاش 1: از URL
             const urlParams = new URLSearchParams(window.location.search);
+            let checkin = urlParams.get('checkin') || '';
+            let checkout = urlParams.get('checkout') || '';
+            let adults = parseInt(urlParams.get('adults')) || 2;
+            
+            // تلاش 2: از فرم (اگه URL خالی بود)
+            if (!checkin || !checkout) {
+                // Traveler form
+                const $checkinInput = $('input[name="checkin"], input[name="start"]');
+                const $checkoutInput = $('input[name="checkout"], input[name="end"]');
+                const $adultsInput = $('select[name="adult_number"], select[name="adults"]');
+                
+                if ($checkinInput.length && $checkinInput.val()) {
+                    checkin = this.formatDate($checkinInput.val());
+                }
+                if ($checkoutInput.length && $checkoutInput.val()) {
+                    checkout = this.formatDate($checkoutInput.val());
+                }
+                if ($adultsInput.length && $adultsInput.val()) {
+                    adults = parseInt($adultsInput.val()) || 2;
+                }
+                
+                console.log('📅 Got dates from form:', checkin, checkout);
+            }
+            
             return {
-                checkin: urlParams.get('checkin') || '',
-                checkout: urlParams.get('checkout') || '',
-                adults: parseInt(urlParams.get('adults')) || 2
+                checkin: checkin,
+                checkout: checkout,
+                adults: adults
             };
-        }
+        },
+        
+        /**
+         * فرمت کردن تاریخ به YYYY-MM-DD
+         */
+        formatDate: function(dateStr) {
+            if (!dateStr) return '';
+            
+            // اگه قبلاً فرمت درست داره
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                return dateStr;
+            }
+            
+            // تبدیل فرمت‌های مختلف
+            // مثل: "30/10/2025" یا "2025/10/30"
+            let parts = dateStr.split(/[\/\-]/);
+            
+            if (parts.length === 3) {
+                // اگه سال در اول باشه: 2025/10/30
+                if (parts[0].length === 4) {
+                    return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+                }
+                // اگه سال در آخر باشه: 30/10/2025
+                else if (parts[2].length === 4) {
+                    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                }
+            }
+            
+            // تلاش آخر: استفاده از Date parser
+            try {
+                const date = new Date(dateStr);
+                if (!isNaN(date.getTime())) {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
+            } catch(e) {}
+            
+            return '';
+        },
     };
 
     // شروع
