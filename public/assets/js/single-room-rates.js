@@ -1,6 +1,6 @@
 /**
  * Ratehawk Single Room Rates
- * Version: 1.0
+ * Version: 1.1 - با نمایش عنوان و قیمت در دکمه Book
  */
 
 (function($) {
@@ -11,6 +11,7 @@
     const RH_SingleRoom = {
         
         selectedRate: null,
+        rates: [],
         
         init: function() {
             console.log('🚀 RH_SingleRoom.init()');
@@ -83,6 +84,12 @@
             // از post ID
             if (typeof st_room_id !== 'undefined') {
                 return st_room_id;
+            }
+            
+            // از data attribute
+            const roomIdFromData = $('[data-room-id]').first().data('room-id');
+            if (roomIdFromData) {
+                return roomIdFromData;
             }
             
             return null;
@@ -206,17 +213,17 @@
             console.log('📊 Displaying', rates.length, 'rates');
             
             // پاک کردن قیمت قدیمی
-            $('.price-wrapper').remove();
+            $('.price-wrapper, .rh-single-room-rates').remove();
             
             // ساخت HTML
             let html = `
                 <div class="rh-single-room-rates" style="background:#f9f9f9;padding:20px;border-radius:8px;margin-bottom:20px;">
                     <h3 style="margin:0 0 15px;color:#333;font-size:20px;">
                         <span style="background:#667eea;color:white;padding:5px 10px;border-radius:4px;font-size:14px;margin-right:10px;">RateHawk</span>
-                        Available Rates
+                        Available Room Rates
                     </h3>
                     <p style="margin:0 0 15px;color:#666;font-size:14px;">
-                        ${params.rooms} Room(s) × ${this.calculateNights(params.checkin, params.checkout)} Night(s) for ${params.adults} Adult(s)
+                        <strong>${params.rooms} Room(s)</strong> × <strong>${this.calculateNights(params.checkin, params.checkout)} Night(s)</strong> for <strong>${params.adults} Adult(s)</strong>
                     </p>
                     <div class="rh-rates-list">
             `;
@@ -235,19 +242,21 @@
                     <div class="rh-rate-option ${index === 0 ? 'selected' : ''}" data-rate-index="${index}" style="background:white;padding:15px;margin-bottom:10px;border-radius:6px;border:2px solid ${index === 0 ? '#667eea' : '#ddd'};cursor:pointer;transition:all 0.3s;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
                             <div style="flex:1;">
-                                <div style="display:flex;align-items:center;margin-bottom:5px;">
-                                    <input type="radio" name="selected_rate" value="${index}" ${index === 0 ? 'checked' : ''} style="margin-right:10px;">
-                                    <strong style="font-size:16px;">${mealType}</strong>
-                                </div>
-                                <div style="font-size:13px;color:#666;margin-left:25px;">
-                                    ${cancellation}
+                                <div style="display:flex;align-items:flex-start;margin-bottom:8px;">
+                                    <input type="radio" name="selected_rate" value="${index}" ${index === 0 ? 'checked' : ''} style="margin:3px 10px 0 0;flex-shrink:0;">
+                                    <div style="flex:1;">
+                                        <strong style="font-size:16px;display:block;margin-bottom:5px;">${mealType}</strong>
+                                        <div style="font-size:13px;color:#666;">
+                                            ${cancellation}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div style="text-align:right;">
-                                <div style="font-size:24px;font-weight:700;color:#667eea;">
+                            <div style="text-align:right;margin-left:15px;">
+                                <div style="font-size:24px;font-weight:700;color:#667eea;white-space:nowrap;">
                                     ${symbol}${Math.round(price)}
                                 </div>
-                                <div style="font-size:11px;color:#999;">total</div>
+                                <div style="font-size:11px;color:#999;">total price</div>
                             </div>
                         </div>
                     </div>
@@ -293,12 +302,12 @@
          */
         getMealLabel: function(meal) {
             const labels = {
-                'nomeal': 'Room Only',
-                'room_only': 'Room Only',
-                'breakfast': 'Room + Breakfast',
-                'half_board': 'Half Board (Breakfast + Dinner)',
-                'full_board': 'Full Board (All Meals)',
-                'all_inclusive': 'All Inclusive'
+                'nomeal': '🛏️ Room Only',
+                'room_only': '🛏️ Room Only',
+                'breakfast': '🍳 Room + Breakfast',
+                'half_board': '🍽️ Half Board (Breakfast + Dinner)',
+                'full_board': '🍴 Full Board (All Meals)',
+                'all_inclusive': '⭐ All Inclusive'
             };
             
             return labels[meal] || meal || 'Room Only';
@@ -308,8 +317,10 @@
          * Event handlers برای انتخاب rate
          */
         attachRateSelectionHandlers: function() {
-            $('.rh-rate-option').on('click', (e) => {
-                const $option = $(e.currentTarget);
+            const self = this;
+            
+            $('.rh-rate-option').on('click', function(e) {
+                const $option = $(this);
                 const index = $option.data('rate-index');
                 
                 // آپدیت UI
@@ -320,12 +331,12 @@
                 $option.find('input[type="radio"]').prop('checked', true);
                 
                 // ذخیره selected rate
-                this.selectedRate = this.rates[index];
+                self.selectedRate = self.rates[index];
                 
-                console.log('✅ Rate selected:', this.selectedRate);
+                console.log('✅ Rate selected:', self.selectedRate);
                 
                 // آپدیت دکمه
-                this.updateBookingButton();
+                self.updateBookingButton();
             });
         },
 
@@ -339,13 +350,27 @@
                 return;
             }
             
-            // تغییر متن دکمه
-            $bookingBtn.text('Book Now - ' + this.getFormattedPrice());
+            const price = this.getFormattedPrice();
+            const mealType = this.getMealLabel(this.selectedRate.meal);
             
-            // اضافه کردن book_hash به لینک
+            // تغییر متن دکمه
+            $bookingBtn.html(`
+                <span style="display:block;font-size:14px;font-weight:normal;margin-bottom:5px;">${mealType}</span>
+                <span style="display:block;font-size:18px;font-weight:700;">Book Now - ${price}</span>
+            `);
+            
+            // اضافه کردن book_hash به data attribute
             if (this.selectedRate.book_hash) {
                 $bookingBtn.attr('data-book-hash', this.selectedRate.book_hash);
+                $bookingBtn.attr('data-rate-price', this.selectedRate.payment_options?.payment_types?.[0]?.show_amount || 0);
+                $bookingBtn.attr('data-rate-currency', this.selectedRate.payment_options?.payment_types?.[0]?.currency_code || 'USD');
             }
+            
+            console.log('🔄 Button updated with:', {
+                price: price,
+                book_hash: this.selectedRate.book_hash,
+                meal: mealType
+            });
         },
 
         getFormattedPrice: function() {
