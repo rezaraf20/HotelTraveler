@@ -152,8 +152,8 @@
                     console.log('✅ Rates received:', response);
                     this.hideLoading();
                     
-                    if (response.success && response.data && response.data.length > 0) {
-                        this.displayRates(response.data, params);
+                    if (response.success && response.data && response.data.rates && response.data.rates.length > 0) {
+                        this.displayRates(response.data.rates, params);
                     } else {
                         this.showNoRatesMessage();
                     }
@@ -364,12 +364,94 @@
                 $bookingBtn.attr('data-book-hash', this.selectedRate.book_hash);
                 $bookingBtn.attr('data-rate-price', this.selectedRate.payment_options?.payment_types?.[0]?.show_amount || 0);
                 $bookingBtn.attr('data-rate-currency', this.selectedRate.payment_options?.payment_types?.[0]?.currency_code || 'USD');
+                $bookingBtn.attr('data-meal-type', this.selectedRate.meal || 'nomeal');
             }
+            
+            // ⚠️ Remove تمام event handlers قدیمی
+            $bookingBtn.off('click');
+            
+            // ✅ اضافه کردن handler جدید
+            const self = this;
+            $bookingBtn.on('click', function(e) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                
+                console.log('🛎️ Book button clicked!');
+                
+                // Set کردن قیمت قبل از redirect
+                self.setRoomPrice($(this));
+                
+                return false;
+            });
             
             console.log('🔄 Button updated with:', {
                 price: price,
                 book_hash: this.selectedRate.book_hash,
                 meal: mealType
+            });
+        },
+
+        /**
+         * Set کردن قیمت در room meta قبل از redirect
+         */
+        setRoomPrice: function($button) {
+            const roomId = this.getRoomId();
+            const price = parseFloat($button.attr('data-rate-price')) || 0;
+            const currency = $button.attr('data-rate-currency') || 'USD';
+            const bookHash = $button.attr('data-book-hash') || '';
+            const mealType = $button.attr('data-meal-type') || 'nomeal';
+            
+            if (!roomId || !price) {
+                console.error('❌ Invalid room ID or price');
+                alert('Error: Invalid booking data');
+                return;
+            }
+            
+            console.log('💾 Setting room price...', {
+                roomId, price, currency, bookHash, mealType
+            });
+            
+            // نمایش loading
+            $button.html('<span class="spinner"></span> Processing...').prop('disabled', true);
+            
+            // AJAX call
+            $.ajax({
+                url: rhRoomRates.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'rh_set_room_price',
+                    nonce: rhRoomRates.nonce,
+                    room_id: roomId,
+                    price: price,
+                    currency: currency,
+                    book_hash: bookHash,
+                    meal_type: mealType
+                },
+                success: (response) => {
+                    console.log('✅ Price set successfully:', response);
+                    
+                    // Redirect به checkout
+                    const checkoutUrl = $button.attr('href') || $button.closest('form').attr('action');
+                    
+                    if (checkoutUrl) {
+                        window.location.href = checkoutUrl;
+                    } else {
+                        // Submit کردن فرم
+                        $button.closest('form').submit();
+                    }
+                },
+                error: (xhr, status, error) => {
+                    console.error('❌ Error setting price:', error);
+                    alert('Error: Could not process booking. Please try again.');
+                    
+                    // بازگرداندن دکمه
+                    const price = this.getFormattedPrice();
+                    const mealType = this.getMealLabel(this.selectedRate.meal);
+                    $button.html(`
+                        <span style="display:block;font-size:14px;font-weight:normal;margin-bottom:5px;">${mealType}</span>
+                        <span style="display:block;font-size:18px;font-weight:700;">Book Now - ${price}</span>
+                    `).prop('disabled', false);
+                }
             });
         },
 
