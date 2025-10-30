@@ -108,7 +108,8 @@ final class Ratehawk_Traveler {
         require_once RH_PLUGIN_DIR . 'includes/class-rh-prebook.php';
         
         // Simple Rates - همیشه load میشه (برای AJAX)
-        require_once RH_PLUGIN_DIR . 'includes/class-rh-simple-rates.php';
+        //require_once RH_PLUGIN_DIR . 'includes/class-rh-simple-rates.php';
+        require_once RH_PLUGIN_DIR . 'includes/class-rh-session-rates.php';
 
         // Frontend
         if (!is_admin()) {   
@@ -140,7 +141,8 @@ final class Ratehawk_Traveler {
         // Initialize Simple Rates (برای AJAX و Frontend)
         // CRITICAL: این باید قبل از is_admin چک بشه
         if (rh_is_configured()) {
-            RH_Simple_Rates::instance();
+            RH_Session_Rates::instance();
+           // RH_Simple_Rates::instance();
         }
         
         // Initialize Admin
