@@ -62,93 +62,96 @@ class RH_API {
      * Main request method (FIXED)
      */
     private function request($endpoint, $method = 'POST', $data = null, $timeout = 30) {
-        // Check credentials
-        if (empty($this->api_key_id) || empty($this->api_key)) {
-            throw new Exception(__('API credentials not configured', 'ratehawk-traveler'));
-        }
-        
-        // Build full URL
-        $url = $this->base_url . $endpoint;
-        
-        // Check rate limit
-        $this->check_rate_limit($endpoint);
-        
-        // Prepare headers
-        $headers = [
-            'Authorization' => 'Basic ' . base64_encode($this->api_key_id . ':' . $this->api_key),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json',
-            'User-Agent' => 'RatehawkTraveler/' . RH_VERSION . ' WordPress/' . get_bloginfo('version')
-        ];
-        
-        // Prepare request args
-        $args = [
-            'method' => $method,
-            'timeout' => $timeout,
-            'headers' => $headers,
-            'sslverify' => true,
-            'httpversion' => '1.1'
-        ];
-        
-        // Add body for POST requests
-        if ($method === 'POST' && !empty($data)) {
-            $args['body'] = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        }
-        
-        // Log request (masked)
-        $this->log_request($endpoint, $method, $data);
-        
-        // Send request
-        $start_time = microtime(true);
-        $response = wp_remote_request($url, $args);
-        $execution_time = microtime(true) - $start_time;
-        
-        // Check for WordPress errors
-        if (is_wp_error($response)) {
-            $error_message = $response->get_error_message();
-            $this->log_error($endpoint, $error_message);
-            throw new Exception($error_message);
-        }
-        
-        // Get response details
-        $http_code = wp_remote_retrieve_response_code($response);
-        $body = wp_remote_retrieve_body($response);
-        
-        // Try to decode JSON
-        $result = json_decode($body, true);
-        
-        // If JSON decode failed
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->log_error($endpoint, "JSON Decode Error: " . json_last_error_msg(), ['body' => substr($body, 0, 500)]);
-            throw new Exception("Invalid JSON response from API");
-        }
-        
-        // Log response
-        $this->log_response($endpoint, $http_code, $result, $execution_time);
-        
-        // Handle errors
-        if ($http_code >= 400) {
-            $error = $result['error'] ?? $result['message'] ?? 'Unknown error';
-            $error_details = $result['error_details'] ?? '';
-            
-            $this->log_error($endpoint, "HTTP $http_code: $error", [
-                'error_details' => $error_details,
-                'full_response' => $result
-            ]);
-            
-            // Special handling for rate limit
-            if ($http_code === 429) {
-                throw new Exception(__('Rate limit exceeded. Please try again later.', 'ratehawk-traveler'));
-            }
-            
-            throw new Exception("API Error ($http_code): $error" . ($error_details ? " - $error_details" : ""));
-        }
-        
-        // Record successful request for rate limiting
-        $this->record_request($endpoint);
-        
-        return $result;
+    // Check credentials
+    if (empty($this->api_key_id) || empty($this->api_key)) {
+        throw new Exception(__('API credentials not configured', 'ratehawk-traveler'));
     }
+    
+    // Build full URL
+    $url = $this->base_url . $endpoint;
+    
+    error_log('🌐 [RH API] URL: ' . $url);
+    error_log('📦 [RH API] Data: ' . json_encode($data));
+    
+    // Check rate limit
+    $this->check_rate_limit($endpoint);
+    
+    // Prepare headers
+    $headers = [
+        'Authorization' => 'Basic ' . base64_encode($this->api_key_id . ':' . $this->api_key),
+        'Content-Type' => 'application/json',
+        'Accept' => 'application/json',
+    ];
+    
+    // Prepare request args
+    $args = [
+        'method' => $method,
+        'timeout' => $timeout,
+        'headers' => $headers,
+        'sslverify' => true,
+    ];
+    
+    // Add body for POST requests
+    if ($method === 'POST' && !empty($data)) {
+        // ✅ FIX: استفاده از JSON_UNESCAPED_UNICODE مثل کد working
+        $json_body = json_encode($data, JSON_UNESCAPED_UNICODE);
+        
+        error_log('📋 [RH API] JSON Body: ' . $json_body);
+        
+        $args['body'] = $json_body;
+    }
+    
+    // Send request
+    $start_time = microtime(true);
+    $response = wp_remote_request($url, $args);
+    $execution_time = microtime(true) - $start_time;
+    
+    // Check for WordPress errors
+    if (is_wp_error($response)) {
+        $error_message = $response->get_error_message();
+        error_log('❌ [RH API] WP Error: ' . $error_message);
+        throw new Exception($error_message);
+    }
+    
+    // Get response details
+    $http_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+    
+    error_log('📥 [RH API] HTTP Code: ' . $http_code);
+    error_log('📥 [RH API] Response: ' . substr($body, 0, 500));
+    
+    // Try to decode JSON
+    $result = json_decode($body, true);
+    
+    // If JSON decode failed
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        error_log('❌ [RH API] JSON Decode Error: ' . json_last_error_msg());
+        error_log('❌ [RH API] Raw body: ' . $body);
+        throw new Exception("Invalid JSON response from API");
+    }
+    
+    // Handle errors
+    if ($http_code >= 400) {
+        $error = $result['error'] ?? $result['message'] ?? 'Unknown error';
+        $error_details = $result['error_details'] ?? '';
+        
+        error_log('❌ [RH API] API Error: HTTP ' . $http_code . ' - ' . $error);
+        
+        // Special handling for rate limit
+        if ($http_code === 429) {
+            throw new Exception(__('Rate limit exceeded. Please try again later.', 'ratehawk-traveler'));
+        }
+        
+        throw new Exception("API Error ($http_code): $error" . ($error_details ? " - $error_details" : ""));
+    }
+    
+    // Record successful request for rate limiting
+    $this->record_request($endpoint);
+    
+    error_log('✅ [RH API] Success! Execution time: ' . round($execution_time, 3) . 's');
+    
+    return $result;
+}
     
     /**
      * Check rate limit before request
@@ -488,4 +491,70 @@ class RH_API {
         $endpoint = "/hotel/static/?language=" . urlencode($language);
         return $this->request($endpoint, 'GET', null, 300);
     }
+
+    public function search_serp_hotels($params) {
+    error_log('🔥 [RH API] search_serp_hotels called');
+    
+    $endpoint = '/search/serp/hotels/';
+    
+    // پارامترهای اجباری
+    $payload = [
+        'checkin' => $params['checkin'],
+        'checkout' => $params['checkout'],
+        'language' => $params['language'] ?? 'en',
+        'currency' => $params['currency'] ?? 'USD',
+        'guests' => $params['guests'],
+    ];
+    
+    // هدف جستجو (حداقل یکی باید باشه)
+    if (!empty($params['hids'])) {
+        $payload['hids'] = $params['hids'];
+    } elseif (!empty($params['city_id'])) {
+        $payload['city_id'] = $params['city_id'];
+    } elseif (!empty($params['region_id'])) {
+        $payload['region_id'] = $params['region_id'];
+    } else {
+        error_log('❌ [RH API] No search target specified');
+        throw new Exception('No search target specified');
+    }
+    
+    // اختیاری
+    if (!empty($params['residency'])) {
+        $payload['residency'] = $params['residency'];
+    }
+    
+    error_log('🌐 [RH API] Calling: ' . $endpoint);
+    error_log('📦 [RH API] Payload: ' . json_encode($payload));
+    
+    // ✅ FIX: ترتیب صحیح پارامترها
+    return $this->request($endpoint, 'POST', $payload);
+}
+
+/**
+ * Test کردن SERP API
+ */
+public function test_serp_search() {
+    error_log('🧪 [RH API] test_serp_search called');
+    
+    $result = $this->search_serp_hotels([
+        'hids' => [8473727], // Test Hotel
+        'checkin' => date('Y-m-d', strtotime('+7 days')),
+        'checkout' => date('Y-m-d', strtotime('+9 days')),
+        'guests' => [
+            ['adults' => 2, 'children' => []]
+        ],
+        'language' => 'en',
+        'currency' => 'USD'
+    ]);
+    
+    if ($result['status'] === 'ok') {
+        $hotels = $result['data']['hotels'] ?? [];
+        error_log('✅ [RH API] SERP test successful: ' . count($hotels) . ' hotels');
+        
+        return $result;
+    }
+    
+    error_log('❌ [RH API] SERP test failed');
+    return $result;
+}
 }
