@@ -104,15 +104,32 @@ final class Ratehawk_Traveler {
         require_once RH_PLUGIN_DIR . 'includes/class-rh-api.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-location-manager.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-hotel-sync.php';
+        //require_once RH_PLUGIN_DIR . 'includes/class-rh-debug.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-traveler-form-integration.php';
+        //require_once RH_PLUGIN_DIR . 'includes/class-rh-traveler-search-integration.php';
+        require_once RH_PLUGIN_DIR . 'includes/class-rh-live-search.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-prebook.php';
+        require_once RH_PLUGIN_DIR . 'includes/class-rh-auto-price-updater.php';
+        require_once RH_PLUGIN_DIR . 'admin/class-rh-auto-price-admin.php';
+        require_once RH_PLUGIN_DIR . 'includes/class-rh-room-quote.php';
+        require_once RH_PLUGIN_DIR . 'includes/class-rh-traveler-prebook-bridge.php';
+        //require_once RH_PLUGIN_DIR . 'includes/class-rh-booking.php';
+        require_once RH_PLUGIN_DIR . 'includes/class-rh-traveler-booking-flow.php';
+        require_once RH_PLUGIN_DIR . 'includes/class-rh-cancellation.php';
+
+
+
+       // require_once RH_PLUGIN_DIR . '/includes/class-rh-price-guard.php';
+       // if (file_exists(RH_PLUGIN_DIR . 'includes/class-rh-price-indexer.php')) {
+        //    require_once RH_PLUGIN_DIR . 'includes/class-rh-price-indexer.php';
+       // }
         
         // Simple Rates - همیشه load میشه (برای AJAX)
         //require_once RH_PLUGIN_DIR . 'includes/class-rh-simple-rates.php';
         require_once RH_PLUGIN_DIR . 'includes/class-rh-session-rates.php';
 
         // Frontend
-        if (!is_admin()) {   
+        if (1) {   
             require_once RH_PLUGIN_DIR . 'includes/class-rh-search.php';
         }
         
@@ -131,6 +148,7 @@ final class Ratehawk_Traveler {
         
         // Frontend styles
         add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
+
         
         if (is_admin()) {
             add_action('admin_init', [$this, 'admin_init']);
@@ -154,9 +172,16 @@ final class Ratehawk_Traveler {
                 RH_Search::instance();
             }
         }
-        
+        //if (class_exists('RH_Price_Indexer')) {
+        //    RH_Price_Indexer::instance();
+       // }
         // Initialize Hotel Sync
         RH_Hotel_Sync::instance();
+        RH_Room_Quote::instance();
+
+        if (rh_is_configured()) {
+            RH_Traveler_Booking_Flow::instance();
+        }
         
         do_action('ratehawk_traveler_init');
     }
@@ -199,20 +224,37 @@ final class Ratehawk_Traveler {
      * Enqueue frontend assets
      */
     public function enqueue_frontend_assets() {
-        // فقط در صفحه هتل
-        if (!is_singular('st_hotel')) {
-            return;
-        }
-        
-        // چک کنید که هتل Ratehawk است
-        global $post;
-        if (!$post || !get_post_meta($post->ID, '_is_ratehawk_hotel', true)) {
-            return;
-        }
-        
-        // Enqueue metapolicy styles (if needed)
-        // wp_enqueue_style('ratehawk-metapolicy', RH_PLUGIN_URL . 'assets/css/metapolicy.css', [], RH_VERSION);
+
+    if (!is_singular(array('st_hotel', 'hotel_room'))) {
+        return;
     }
+
+    global $post;
+    if (!$post || !get_post_meta($post->ID, '_is_ratehawk_hotel', true)) {
+        return;
+    }
+
+    // Load booking-flow.js
+    wp_enqueue_script(
+        'rh-booking-flow',
+        RH_PLUGIN_URL . 'assets/js/booking-flow.js',
+        ['jquery'],
+        RH_VERSION,
+        true
+    );
+
+    // 🔥 اینجا دقیقاً باید لوکالایز بشه
+    wp_localize_script(
+        'rh-booking-flow',
+        'rhBookingFlow',
+        [
+            'ajax_url'       => admin_url('admin-ajax.php'),
+            'prebook_nonce'  => wp_create_nonce('rh_nonce'),
+            'checkout_nonce' => wp_create_nonce('rh_nonce'),
+        ]
+    );
+}
+
     
     public function cache() {
         return RH_Cache::instance();
@@ -225,6 +267,13 @@ final class Ratehawk_Traveler {
     public function hotel_sync() {
         return RH_Hotel_Sync::instance();
     }
+    /*public function price_indexer() {
+        if (class_exists('RH_Price_Indexer')) {
+            return RH_Price_Indexer::instance();
+        }
+        return null;
+    }*/
+
 }
 
 function ratehawk_traveler() {
@@ -240,3 +289,45 @@ function rh_api() {
 function rh_hotel_sync() {
     return ratehawk_traveler()->hotel_sync();
 }
+
+//function rh_price_indexer() {
+//    return ratehawk_traveler()->price_indexer();
+//}
+
+add_action('init', function () {
+    if (function_exists('remove_all_actions')) {
+        remove_all_actions('wp_ajax_rh_get_room_rates');
+        remove_all_actions('wp_ajax_nopriv_rh_get_room_rates');
+    }
+}, 50); // قبل از 9999 تا زمین تمیز شود
+
+
+// در فایل ratehawk-traveler.php
+// در ratehawk-traveler.php یا admin class
+wp_enqueue_style(
+    'rh-children-ages',
+    RH_PLUGIN_URL . 'public/assets/css/children-ages.css',
+    [],
+    RH_VERSION
+);
+
+add_action('wp_enqueue_scripts', function () {
+
+    // فقط در صفحه‌ی Booking History لود کن
+    if (is_page() && isset($_GET['sc']) && $_GET['sc'] === 'booking-history') {
+
+        // jQuery از قبل هست، فقط اسکریپت خودمون:
+        wp_enqueue_script(
+            'rh-cancel-booking',
+            plugins_url('public/assets/js/rh-cancel-booking.js', __FILE__),
+            array('jquery'),
+            '1.0.0',
+            true
+        );
+
+        wp_localize_script('rh-cancel-booking', 'rhCancel', array(
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce'   => wp_create_nonce('rh_cancel_booking'),
+        ));
+    }
+});
